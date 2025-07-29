@@ -28,7 +28,10 @@ def login():
     
     form = LoginForm()
     if form.validate_on_submit():
+        # Try to find user by username first, then by email
         user = User.query.filter_by(username=form.username.data).first()
+        if not user:
+            user = User.query.filter_by(email=form.email.data).first()
         
         if user and user.check_password(form.password.data):
             if user.is_verified:
@@ -38,7 +41,7 @@ def login():
             else:
                 flash('Please verify your email before logging in.', 'warning')
         else:
-            flash('Invalid username or password', 'danger')
+            flash('Invalid username/email or password', 'danger')
     
     return render_template('login.html', form=form)
 
