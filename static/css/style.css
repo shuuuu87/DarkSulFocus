@@ -440,6 +440,18 @@ body {
     opacity: 0.5;
 }
 
+/* Chart Container */
+#studyChart {
+    max-height: 400px !important;
+    height: 400px !important;
+}
+
+.chart-container {
+    position: relative;
+    height: 400px;
+    width: 100%;
+}
+
 /* CTA Card */
 .cta-card {
     background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
