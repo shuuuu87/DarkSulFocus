@@ -27,7 +27,12 @@
         {% if current_user.is_authenticated %}
         <div class="sidebar-user">
             <div class="user-avatar">
-                <i class="fas fa-user-circle"></i>
+                {% if current_user.profile_image and current_user.profile_image != 'default.png' %}
+                    <img src="{{ url_for('static', filename='uploads/profiles/' + current_user.profile_image) }}" 
+                         alt="Profile" class="sidebar-profile-image rounded-circle">
+                {% else %}
+                    <i class="fas fa-user-circle"></i>
+                {% endif %}
             </div>
             <div class="user-info">
                 <div class="username">{{ current_user.username }}</div>

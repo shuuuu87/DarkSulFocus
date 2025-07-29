@@ -6,6 +6,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from flask_mail import Message
 from werkzeug.utils import secure_filename
 from PIL import Image
+from sqlalchemy import desc
 import pytz
 
 from app import db, mail
@@ -199,8 +200,36 @@ def profile():
         
         # Handle profile image upload
         if form.profile_image.data:
-            filename = save_profile_image(form.profile_image.data)
-            current_user.profile_image = filename
+            try:
+                file = form.profile_image.data
+                filename = secure_filename(file.filename)
+                
+                # Generate unique filename
+                unique_filename = f"{current_user.id}_{secrets.token_hex(8)}_{filename}"
+                
+                # Save file
+                upload_path = os.path.join(current_app.root_path, 'static', 'uploads', 'profiles')
+                os.makedirs(upload_path, exist_ok=True)
+                file_path = os.path.join(upload_path, unique_filename)
+                
+                # Resize and save image
+                image = Image.open(file)
+                image = image.convert('RGB')  # Convert to RGB if needed
+                
+                # Resize to 300x300 pixels
+                image.thumbnail((300, 300), Image.Resampling.LANCZOS)
+                image.save(file_path, 'JPEG', quality=85)
+                
+                # Delete old profile image if it exists and isn't default
+                if current_user.profile_image and current_user.profile_image != 'default.png':
+                    old_file_path = os.path.join(upload_path, current_user.profile_image)
+                    if os.path.exists(old_file_path):
+                        os.remove(old_file_path)
+                
+                current_user.profile_image = unique_filename
+                flash('Profile image updated successfully!', 'success')
+            except Exception as e:
+                flash('Error uploading image. Please try again.', 'danger')
         
         current_user.username = form.username.data
         current_user.email = form.email.data
@@ -302,8 +331,8 @@ def leaderboard():
     leaderboard_data = []
     for i, user in enumerate(top_users, 1):
         # Calculate last active (last completed task or task creation)
-        last_completed_task = Task.query.filter_by(user_id=user.id, is_completed=True).order_by(Task.completed_at.desc()).first()
-        last_any_task = Task.query.filter_by(user_id=user.id).order_by(Task.created_at.desc()).first()
+        last_completed_task = Task.query.filter_by(user_id=user.id, is_completed=True).order_by(desc(Task.completed_at)).first()
+        last_any_task = Task.query.filter_by(user_id=user.id).order_by(desc(Task.created_at)).first()
         
         if last_completed_task and last_completed_task.completed_at:
             last_active = last_completed_task.completed_at
