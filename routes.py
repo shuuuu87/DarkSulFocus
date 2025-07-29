@@ -52,12 +52,11 @@ def register():
     
     form = RegisterForm()
     if form.validate_on_submit():
-        user = User(
-            username=form.username.data,
-            email=form.email.data,
-            verification_token=secrets.token_urlsafe(32),
-            is_verified=True  # Auto-verify for now due to email config issues
-        )
+        user = User()
+        user.username = form.username.data
+        user.email = form.email.data
+        user.verification_token = secrets.token_urlsafe(32)
+        user.is_verified = True  # Auto-verify for now due to email config issues
         user.set_password(form.password.data)
         
         db.session.add(user)
@@ -110,12 +109,11 @@ def home():
 def add_task():
     form = TaskForm()
     if form.validate_on_submit():
-        task = Task(
-            user_id=current_user.id,
-            title=form.title.data,
-            duration_minutes=form.duration_minutes.data,
-            remaining_seconds=form.duration_minutes.data * 60
-        )
+        task = Task()
+        task.user_id = current_user.id
+        task.title = form.title.data
+        task.duration_minutes = form.duration_minutes.data
+        task.remaining_seconds = (form.duration_minutes.data or 0) * 60
         db.session.add(task)
         db.session.commit()
         flash('Task added successfully!', 'success')
@@ -254,15 +252,15 @@ def competition():
     if form.validate_on_submit():
         opponent = User.query.filter_by(username=form.opponent_username.data).first()
         
-        if opponent.id == current_user.id:
+        if opponent and opponent.id == current_user.id:
             flash('You cannot challenge yourself!', 'danger')
-        else:
-            challenge = Challenge(
-                challenger_id=current_user.id,
-                challenged_id=opponent.id,
-                duration_days=form.duration_days.data,
-                end_date=datetime.utcnow() + timedelta(days=form.duration_days.data)
-            )
+        elif opponent:
+            challenge = Challenge()
+            challenge.challenger_id = current_user.id
+            challenge.challenged_id = opponent.id
+            challenge.duration_days = form.duration_days.data
+            challenge.end_date = datetime.utcnow() + timedelta(days=form.duration_days.data)
+            challenge.status = 'active'
             db.session.add(challenge)
             db.session.commit()
             flash(f'Challenge sent to {opponent.username}!', 'success')

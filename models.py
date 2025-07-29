@@ -131,7 +131,9 @@ class Task(db.Model):
             points_earned = total_minutes * 0.083333  # 1/12 point per minute
             
             # Add points to user
-            self.user.total_points += points_earned
+            user = db.session.get(User, self.user_id)
+            if user:
+                user.total_points += points_earned
             
             # Update daily stats
             ist = pytz.timezone('Asia/Kolkata')
@@ -139,14 +141,20 @@ class Task(db.Model):
             daily_stat = DailyStats.query.filter_by(user_id=self.user_id, date=today).first()
             
             if not daily_stat:
-                daily_stat = DailyStats(user_id=self.user_id, date=today, minutes_studied=0)
+                daily_stat = DailyStats()
+                daily_stat.user_id = self.user_id
+                daily_stat.date = today
+                daily_stat.minutes_studied = 0
                 db.session.add(daily_stat)
             
             daily_stat.minutes_studied += total_minutes
-            self.user.total_study_time += total_minutes
             
-            # Update streak
-            self.user.update_streak(daily_stat.minutes_studied)
+            # Update user's total study time and streak
+            user = db.session.get(User, self.user_id)
+            if user:
+                user.total_study_time += total_minutes
+                # Update streak
+                user.update_streak(daily_stat.minutes_studied)
             
             return points_earned
         return 0
@@ -181,8 +189,9 @@ class Challenge(db.Model):
             
             # Award points to winner
             if self.winner_id:
-                winner = User.query.get(self.winner_id)
-                winner.total_points += self.points_gained
+                winner = db.session.get(User, self.winner_id)
+                if winner:
+                    winner.total_points += self.points_gained
 
 class DailyStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)
