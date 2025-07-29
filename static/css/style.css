@@ -88,7 +88,7 @@ body {
 .sidebar {
     position: fixed;
     top: 0;
-    left: -var(--sidebar-width);
+    left: -var(--sidebar-width); /* Start closed by default */
     width: var(--sidebar-width);
     height: 100vh;
     background: var(--bg-secondary);
@@ -96,6 +96,7 @@ body {
     transition: left 0.3s ease;
     z-index: 1050;
     overflow-y: auto;
+    transform: translateX(0); /* Ensure it's properly positioned */
 }
 
 .sidebar.active {
@@ -112,12 +113,14 @@ body {
     z-index: 1040;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s ease;
+    transition: all 0.3s ease;
+    pointer-events: none; /* Don't interfere when hidden */
 }
 
 .sidebar-overlay.active {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto; /* Enable clicking when active */
 }
 
 .sidebar-header {

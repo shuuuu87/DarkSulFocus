@@ -31,6 +31,15 @@ function initializeSidebar() {
         closeSidebar();
     });
 
+    // Close sidebar when clicking outside (anywhere in main content)
+    document.addEventListener('click', function(e) {
+        if (sidebar.classList.contains('active') && 
+            !sidebar.contains(e.target) && 
+            !sidebarToggle.contains(e.target)) {
+            closeSidebar();
+        }
+    });
+
     // Close sidebar on escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && sidebar.classList.contains('active')) {
