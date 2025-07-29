@@ -88,7 +88,7 @@ body {
 .sidebar {
     position: fixed;
     top: 0;
-    left: -var(--sidebar-width); /* Start closed by default */
+    left: -280px; /* Start completely hidden */
     width: var(--sidebar-width);
     height: 100vh;
     background: var(--bg-secondary);
@@ -96,11 +96,12 @@ body {
     transition: left 0.3s ease;
     z-index: 1050;
     overflow-y: auto;
-    transform: translateX(0); /* Ensure it's properly positioned */
+    display: none; /* Hidden by default */
 }
 
 .sidebar.active {
     left: 0;
+    display: block; /* Show when active */
 }
 
 .sidebar-overlay {

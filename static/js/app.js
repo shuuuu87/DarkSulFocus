@@ -70,8 +70,11 @@ function openSidebar() {
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebarOverlay');
     
-    sidebar.classList.add('active');
-    sidebarOverlay.classList.add('active');
+    sidebar.style.display = 'block'; // Show sidebar first
+    setTimeout(() => {
+        sidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+    }, 10); // Small delay for smooth animation
     document.body.style.overflow = 'hidden';
 }
 
@@ -82,6 +85,13 @@ function closeSidebar() {
     sidebar.classList.remove('active');
     sidebarOverlay.classList.remove('active');
     document.body.style.overflow = '';
+    
+    // Hide sidebar after animation completes
+    setTimeout(() => {
+        if (!sidebar.classList.contains('active')) {
+            sidebar.style.display = 'none';
+        }
+    }, 300); // Match transition duration
 }
 
 /**
