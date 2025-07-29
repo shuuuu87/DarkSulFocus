@@ -82,9 +82,10 @@
                                     </td>
                                     <td class="text-center">
                                         {% if entry.last_active %}
-                                            <span class="text-muted" title="{{ entry.last_active.strftime('%Y-%m-%d %H:%M') }}">
-                                                {{ entry.last_active.strftime('%b %d, %Y') }}
-                                            </span>
+                                            <div class="text-muted">
+                                                <div>{{ entry.last_active.strftime('%b %d, %Y') }}</div>
+                                                <small>{{ entry.last_active.strftime('%I:%M %p') }}</small>
+                                            </div>
                                         {% else %}
                                             <span class="text-muted">Never</span>
                                         {% endif %}

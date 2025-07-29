@@ -301,9 +301,16 @@ def leaderboard():
     
     leaderboard_data = []
     for i, user in enumerate(top_users, 1):
-        # Calculate last active (last study session or task creation)
-        last_task = Task.query.filter_by(user_id=user.id, is_completed=True).order_by(Task.created_at.desc()).first()
-        last_active = last_task.created_at if last_task else user.joined_date
+        # Calculate last active (last completed task or task creation)
+        last_completed_task = Task.query.filter_by(user_id=user.id, is_completed=True).order_by(Task.completed_at.desc()).first()
+        last_any_task = Task.query.filter_by(user_id=user.id).order_by(Task.created_at.desc()).first()
+        
+        if last_completed_task and last_completed_task.completed_at:
+            last_active = last_completed_task.completed_at
+        elif last_any_task:
+            last_active = last_any_task.created_at
+        else:
+            last_active = user.joined_date
         
         leaderboard_data.append({
             'rank': i,
