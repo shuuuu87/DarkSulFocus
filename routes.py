@@ -293,6 +293,29 @@ def decline_challenge(challenge_id):
     flash('Challenge declined.', 'info')
     return redirect(url_for('main.competition'))
 
+@main.route('/leaderboard')
+@login_required
+def leaderboard():
+    # Get top 10 users by total points
+    top_users = User.query.order_by(User.total_points.desc()).limit(10).all()
+    
+    leaderboard_data = []
+    for i, user in enumerate(top_users, 1):
+        # Calculate last active (last study session or task creation)
+        last_task = Task.query.filter_by(user_id=user.id, is_completed=True).order_by(Task.created_at.desc()).first()
+        last_active = last_task.created_at if last_task else user.joined_date
+        
+        leaderboard_data.append({
+            'rank': i,
+            'user': user,
+            'points': user.total_points,
+            'rank_name': user.get_rank(),
+            'streak': user.current_streak,
+            'last_active': last_active
+        })
+    
+    return render_template('leaderboard.html', leaderboard_data=leaderboard_data)
+
 @main.route('/help')
 def help():
     return render_template('help.html')

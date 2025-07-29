@@ -48,6 +48,9 @@
             <li><a href="{{ url_for('main.competition') }}" class="{% if request.endpoint == 'main.competition' %}active{% endif %}">
                 <i class="fas fa-trophy"></i> Competition
             </a></li>
+            <li><a href="{{ url_for('main.leaderboard') }}" class="{% if request.endpoint == 'main.leaderboard' %}active{% endif %}">
+                <i class="fas fa-crown"></i> Leaderboard
+            </a></li>
             <li><a href="{{ url_for('main.help') }}" class="{% if request.endpoint == 'main.help' %}active{% endif %}">
                 <i class="fas fa-question-circle"></i> Help
             </a></li>

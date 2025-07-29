@@ -462,6 +462,41 @@ body {
     box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
 }
 
+/* Leaderboard Styles */
+.leaderboard-header {
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+    border: 1px solid var(--accent-primary);
+    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
+}
+
+.rank-badge {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.rank-dormant { background-color: #6c757d !important; }
+.rank-novice { background-color: #17a2b8 !important; }
+.rank-apprentice { background-color: #28a745 !important; }
+.rank-adept { background-color: #20c997 !important; }
+.rank-expert { background-color: #ffc107 !important; color: #000 !important; }
+.rank-master { background-color: #fd7e14 !important; }
+.rank-grandmaster { background-color: #e83e8c !important; }
+.rank-legend { background-color: #6f42c1 !important; }
+.rank-myth { background-color: #dc3545 !important; }
+.rank-darkensul-initiate { background-color: #495057 !important; }
+.rank-darkensul-core { background: linear-gradient(45deg, #000, #ff0000) !important; }
+.rank-darkensul-transcendent { background: linear-gradient(45deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff) !important; }
+
+.table-success {
+    background-color: rgba(0, 255, 136, 0.1) !important;
+    border-color: var(--accent-primary) !important;
+}
+
+.user-avatar i {
+    color: var(--accent-primary);
+}
+
 /* Profile Styles */
 .profile-card {
     border: 1px solid var(--accent-primary);
