@@ -55,15 +55,22 @@ def register():
         user = User(
             username=form.username.data,
             email=form.email.data,
-            verification_token=secrets.token_urlsafe(32)
+            verification_token=secrets.token_urlsafe(32),
+            is_verified=True  # Auto-verify for now due to email config issues
         )
         user.set_password(form.password.data)
         
         db.session.add(user)
         db.session.commit()
         
-        send_verification_email(user)
-        flash('Registration successful! Please check your email to verify your account.', 'success')
+        # Try to send verification email, but don't block registration if it fails
+        try:
+            send_verification_email(user)
+            flash('Registration successful! You can now log in. (Verification email may not work due to configuration)', 'success')
+        except Exception as e:
+            current_app.logger.error(f'Email send failed: {e}')
+            flash('Registration successful! You can now log in directly.', 'success')
+        
         return redirect(url_for('main.login'))
     
     return render_template('register.html', form=form)
