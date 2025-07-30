@@ -115,6 +115,7 @@ def add_task():
         task.title = form.title.data
         task.duration_minutes = form.duration_minutes.data
         task.remaining_seconds = (form.duration_minutes.data or 0) * 60
+        task.is_paused = True  # Ensure new tasks are paused by default
         db.session.add(task)
         db.session.commit()
         flash('Task added successfully!', 'success')

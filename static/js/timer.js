@@ -33,7 +33,7 @@ class TimerManager {
             const remainingSeconds = parseInt(element.dataset.remaining) || 0;
             const taskItem = element.closest('.task-item');
             const isPaused = taskItem && taskItem.classList.contains('paused');
-            
+            // Only treat as paused if the class is present
             if (taskId) {
                 this.timers.set(taskId, {
                     element: element,
@@ -42,7 +42,6 @@ class TimerManager {
                     lastUpdate: Date.now(),
                     taskItem: taskItem
                 });
-                
                 this.updateTimerDisplay(taskId);
             }
         });
@@ -78,18 +77,18 @@ class TimerManager {
 
     updateActiveTimers() {
         const now = Date.now();
-        
         this.timers.forEach((timer, taskId) => {
             if (!timer.isPaused && timer.remainingSeconds > 0) {
-                // Calculate elapsed time since last update
-                const elapsed = Math.floor((now - timer.lastUpdate) / 1000);
-                
-                if (elapsed >= 1) {
+                // Calculate elapsed time since last update (in seconds, can be fractional)
+                const elapsed = (now - timer.lastUpdate) / 1000;
+                if (elapsed >= 0.1) { // update at least every 100ms for smoothness
+                    const prevSeconds = Math.ceil(timer.remainingSeconds);
                     timer.remainingSeconds = Math.max(0, timer.remainingSeconds - elapsed);
                     timer.lastUpdate = now;
-                    
-                    this.updateTimerDisplay(taskId);
-                    
+                    // Only update DOM if value changed
+                    if (Math.ceil(timer.remainingSeconds) !== prevSeconds) {
+                        this.updateTimerDisplay(taskId);
+                    }
                     // Check if timer completed
                     if (timer.remainingSeconds <= 0) {
                         this.handleTimerCompletion(taskId);
@@ -102,10 +101,10 @@ class TimerManager {
     updateTimerDisplay(taskId) {
         const timer = this.timers.get(taskId);
         if (!timer || !timer.element) return;
-        
-        const timeString = this.formatTime(timer.remainingSeconds);
+        // Only use integer seconds for display
+        const intSeconds = Math.ceil(timer.remainingSeconds);
+        const timeString = this.formatTime(intSeconds);
         timer.element.textContent = timeString;
-        
         // Update visual state based on remaining time
         this.updateTimerVisualState(timer);
     }

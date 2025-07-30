@@ -115,9 +115,9 @@ class Task(db.Model):
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     
     def get_time_display(self):
-        hours = self.remaining_seconds // 3600
-        minutes = (self.remaining_seconds % 3600) // 60
-        seconds = self.remaining_seconds % 60
+        hours = int(self.remaining_seconds // 3600)
+        minutes = int((self.remaining_seconds % 3600) // 60)
+        seconds = int(self.remaining_seconds % 60)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
     
     def complete_task(self):
