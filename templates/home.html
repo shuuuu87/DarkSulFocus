@@ -1,3 +1,15 @@
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.task-controls a.btn-success, .task-controls a.btn-warning').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var url = btn.getAttribute('href');
+            fetch(url, { method: 'GET' })
+                .then(function() { window.location.reload(); });
+        });
+    });
+});
+</script>
 {% extends "base.html" %}
 
 {% block title %}Home - DARKSULFOCUS{% endblock %}
