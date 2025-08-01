@@ -1,14 +1,15 @@
 /**
- * DARKSULFOCUS - Timer Management JavaScript
- * Handles real-time timer updates, countdown functionality, and task completion
+ * DARKSULFOCUS - Local Storage Timer Management
+ * Handles persistent timer state using browser local storage
+ * Timers persist through page refreshes, navigation, and logouts
  */
 
 class TimerManager {
     constructor() {
         this.timers = new Map();
         this.updateInterval = null;
-        this.syncInterval = null;
         this.initialized = false;
+        this.storageKey = 'darksulfocus_timers';
         
         this.init();
     }
@@ -16,13 +17,52 @@ class TimerManager {
     init() {
         if (this.initialized) return;
         
+        this.loadTimersFromStorage();
         this.findAndInitializeTimers();
         this.startUpdateLoop();
-        this.startSyncLoop();
         this.setupEventListeners();
         
         this.initialized = true;
-        console.log('Timer Manager initialized');
+        console.log('Timer Manager initialized with local storage');
+    }
+
+    loadTimersFromStorage() {
+        try {
+            const storedTimers = localStorage.getItem(this.storageKey);
+            if (storedTimers) {
+                const timersData = JSON.parse(storedTimers);
+                Object.entries(timersData).forEach(([taskId, timerData]) => {
+                    this.timers.set(taskId, {
+                        ...timerData,
+                        lastUpdate: Date.now(),
+                        element: null, // Will be set when DOM elements are found
+                        taskItem: null
+                    });
+                });
+                console.log(`Loaded ${this.timers.size} timers from local storage`);
+            }
+        } catch (error) {
+            console.error('Error loading timers from storage:', error);
+            localStorage.removeItem(this.storageKey);
+        }
+    }
+
+    saveTimersToStorage() {
+        try {
+            const timersData = {};
+            this.timers.forEach((timer, taskId) => {
+                timersData[taskId] = {
+                    remainingSeconds: timer.remainingSeconds,
+                    isPaused: timer.isPaused,
+                    totalDuration: timer.totalDuration,
+                    title: timer.title,
+                    lastUpdate: timer.lastUpdate
+                };
+            });
+            localStorage.setItem(this.storageKey, JSON.stringify(timersData));
+        } catch (error) {
+            console.error('Error saving timers to storage:', error);
+        }
     }
 
     findAndInitializeTimers() {
@@ -30,23 +70,67 @@ class TimerManager {
         
         timerElements.forEach(element => {
             const taskId = this.getTaskId(element);
-            const remainingSeconds = parseInt(element.dataset.remaining) || 0;
             const taskItem = element.closest('.task-item');
-            const isPaused = taskItem && taskItem.classList.contains('paused');
-            // Only treat as paused if the class is present
+            
             if (taskId) {
-                this.timers.set(taskId, {
-                    element: element,
-                    remainingSeconds: remainingSeconds,
-                    isPaused: isPaused,
-                    lastUpdate: Date.now(),
-                    taskItem: taskItem
-                });
+                // Check if timer exists in storage
+                let timer = this.timers.get(taskId);
+                
+                if (!timer) {
+                    // Create new timer from DOM data
+                    const remainingSeconds = parseInt(element.dataset.remaining) || 0;
+                    const titleElement = taskItem.querySelector('.task-title');
+                    const durationElement = taskItem.querySelector('.task-duration');
+                    
+                    timer = {
+                        remainingSeconds: remainingSeconds,
+                        isPaused: true, // New timers start paused
+                        lastUpdate: Date.now(),
+                        totalDuration: remainingSeconds,
+                        title: titleElement ? titleElement.textContent : 'Task',
+                        element: element,
+                        taskItem: taskItem
+                    };
+                    this.timers.set(taskId, timer);
+                } else {
+                    // Restore DOM references for existing timer
+                    timer.element = element;
+                    timer.taskItem = taskItem;
+                }
+                
                 this.updateTimerDisplay(taskId);
+                this.updateTimerVisualState(timer);
             }
         });
         
+        // Clean up timers that no longer have DOM elements
+        this.cleanupOrphanedTimers();
+        
         console.log(`Initialized ${this.timers.size} timers`);
+        this.saveTimersToStorage();
+    }
+
+    cleanupOrphanedTimers() {
+        // Only cleanup if we're on a page that shows tasks
+        const taskContainer = document.querySelector('.task-card, .tasks-container, .task-list, #active-tasks');
+        if (!taskContainer) {
+            // Not on a tasks page, don't cleanup timers
+            return;
+        }
+
+        const activeTaskIds = new Set();
+        document.querySelectorAll('.task-item').forEach(item => {
+            const taskId = item.dataset.taskId;
+            if (taskId) activeTaskIds.add(taskId);
+        });
+
+        // Only remove timers that don't have corresponding DOM elements on task pages
+        for (const [taskId, timer] of this.timers.entries()) {
+            if (!activeTaskIds.has(taskId)) {
+                this.timers.delete(taskId);
+                console.log(`Cleaned up orphaned timer: ${taskId}`);
+            }
+        }
     }
 
     getTaskId(element) {
@@ -64,19 +148,12 @@ class TimerManager {
         }, 1000);
     }
 
-    startSyncLoop() {
-        if (this.syncInterval) {
-            clearInterval(this.syncInterval);
-        }
-        
-        // Sync with server every 30 seconds
-        this.syncInterval = setInterval(() => {
-            this.syncWithServer();
-        }, 30000);
-    }
+    // No server sync needed - using local storage only
 
     updateActiveTimers() {
         const now = Date.now();
+        let needsSave = false;
+        
         this.timers.forEach((timer, taskId) => {
             if (!timer.isPaused && timer.remainingSeconds > 0) {
                 // Calculate elapsed time since last update (in seconds, can be fractional)
@@ -85,10 +162,13 @@ class TimerManager {
                     const prevSeconds = Math.ceil(timer.remainingSeconds);
                     timer.remainingSeconds = Math.max(0, timer.remainingSeconds - elapsed);
                     timer.lastUpdate = now;
+                    needsSave = true;
+                    
                     // Only update DOM if value changed
                     if (Math.ceil(timer.remainingSeconds) !== prevSeconds) {
                         this.updateTimerDisplay(taskId);
                     }
+                    
                     // Check if timer completed
                     if (timer.remainingSeconds <= 0) {
                         this.handleTimerCompletion(taskId);
@@ -96,6 +176,11 @@ class TimerManager {
                 }
             }
         });
+        
+        // Save to storage if any timer was updated
+        if (needsSave) {
+            this.saveTimersToStorage();
+        }
     }
 
     updateTimerDisplay(taskId) {
@@ -124,12 +209,35 @@ class TimerManager {
             element.classList.add('timer-warning');
         }
         
-        // Update pause state
+        // Update pause state and button
         if (timer.isPaused) {
             taskItem?.classList.add('paused');
         } else {
             taskItem?.classList.remove('paused');
         }
+        
+        // Update the play/pause button
+        this.updateControlButton(taskItem, timer.isPaused);
+    }
+
+    updateControlButton(taskItem, isPaused) {
+        if (!taskItem) return;
+        
+        const controlsDiv = taskItem.querySelector('.task-controls');
+        if (!controlsDiv) return;
+        
+        // Find the existing play/pause button
+        const existingButton = controlsDiv.querySelector('.btn-success, .btn-warning');
+        if (!existingButton) return;
+        
+        // Create new button based on state
+        const newButton = document.createElement('a');
+        newButton.href = '#';
+        newButton.className = isPaused ? 'btn btn-success btn-sm' : 'btn btn-warning btn-sm';
+        newButton.innerHTML = isPaused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+        
+        // Replace the existing button
+        existingButton.replaceWith(newButton);
     }
 
     handleTimerCompletion(taskId) {
@@ -141,6 +249,9 @@ class TimerManager {
         // Stop the timer
         timer.isPaused = true;
         timer.remainingSeconds = 0;
+        
+        // Save to local storage
+        this.saveTimersToStorage();
         
         // Update server about completion
         this.completeTask(taskId);
@@ -154,26 +265,24 @@ class TimerManager {
 
     async completeTask(taskId) {
         try {
-            const response = await fetch('/update_timer', {
+            const response = await fetch(`/complete_task/${taskId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': this.getCSRFToken()
-                },
-                body: JSON.stringify({
-                    task_id: taskId,
-                    remaining_seconds: 0
-                })
+                }
             });
             
             const data = await response.json();
             
-            if (data.completed) {
+            if (data.success && data.completed) {
                 this.handleTaskCompleted(taskId, data.points_earned);
+                console.log(`Task ${taskId} completed! Points earned: ${data.points_earned}`);
+            } else {
+                console.error(`Error completing task ${taskId}:`, data.error || 'Unknown error');
             }
         } catch (error) {
             console.error('Error completing task:', error);
-            window.DarkSulFocus?.showErrorToast('Failed to update task completion');
         }
     }
 
@@ -263,29 +372,10 @@ class TimerManager {
         }
     }
 
-    async syncWithServer() {
-        const activeTimers = Array.from(this.timers.entries())
-            .filter(([_, timer]) => !timer.isPaused && timer.remainingSeconds > 0);
-        
-        if (activeTimers.length === 0) return;
-        
-        for (const [taskId, timer] of activeTimers) {
-            try {
-                await fetch('/update_timer', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': this.getCSRFToken()
-                    },
-                    body: JSON.stringify({
-                        task_id: taskId,
-                        remaining_seconds: timer.remainingSeconds
-                    })
-                });
-            } catch (error) {
-                console.error(`Error syncing timer ${taskId}:`, error);
-            }
-        }
+    // Local storage persistence - no server sync needed
+    persistTimer(taskId) {
+        this.saveTimersToStorage();
+        console.log(`Timer ${taskId} persisted to local storage`);
     }
 
     pauseTimer(taskId) {
@@ -293,20 +383,71 @@ class TimerManager {
         if (timer) {
             timer.isPaused = true;
             this.updateTimerVisualState(timer);
+            this.saveTimersToStorage();
+            
+            console.log(`Timer ${taskId} paused`);
         }
     }
 
     resumeTimer(taskId) {
         const timer = this.timers.get(taskId);
         if (timer) {
+            // Pause all other timers first (only one timer can run at a time)
+            this.pauseAllTimers();
+            
             timer.isPaused = false;
             timer.lastUpdate = Date.now();
             this.updateTimerVisualState(timer);
+            this.saveTimersToStorage();
+            
+            console.log(`Timer ${taskId} resumed`);
         }
+    }
+
+    pauseAllTimers() {
+        this.timers.forEach((timer, taskId) => {
+            if (!timer.isPaused) {
+                timer.isPaused = true;
+                this.updateTimerVisualState(timer);
+            }
+        });
+        this.saveTimersToStorage();
     }
 
     removeTimer(taskId) {
         this.timers.delete(taskId);
+        this.saveTimersToStorage();
+    }
+
+    // Create a new timer (when adding tasks)
+    createTimer(taskId, durationMinutes, title) {
+        const timer = {
+            remainingSeconds: durationMinutes * 60,
+            isPaused: true,
+            lastUpdate: Date.now(),
+            totalDuration: durationMinutes * 60,
+            title: title,
+            element: null,
+            taskItem: null
+        };
+        
+        this.timers.set(taskId, timer);
+        this.saveTimersToStorage();
+        
+        return timer;
+    }
+
+    // Reset a timer to its original duration
+    resetTimer(taskId) {
+        const timer = this.timers.get(taskId);
+        if (timer) {
+            timer.remainingSeconds = timer.totalDuration;
+            timer.isPaused = true;
+            timer.lastUpdate = Date.now();
+            this.updateTimerDisplay(taskId);
+            this.updateTimerVisualState(timer);
+            this.saveTimersToStorage();
+        }
     }
 
     formatTime(seconds) {
@@ -333,10 +474,11 @@ class TimerManager {
             
             // Handle pause/resume buttons
             if (e.target.closest('.btn-warning, .btn-success')) {
-                const isPaused = taskItem.classList.contains('paused');
-                if (isPaused) {
+                e.preventDefault(); // Prevent default link behavior
+                const timer = this.timers.get(taskId);
+                if (timer && timer.isPaused) {
                     this.resumeTimer(taskId);
-                } else {
+                } else if (timer) {
                     this.pauseTimer(taskId);
                 }
             }
@@ -347,33 +489,49 @@ class TimerManager {
             }
         });
         
-        // Listen for page visibility changes
+        // Listen for page visibility changes to update lastUpdate times
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // Re-sync when page becomes visible
-                this.syncWithServer();
+                // Update lastUpdate for all active timers when page becomes visible
+                const now = Date.now();
+                this.timers.forEach((timer, taskId) => {
+                    if (!timer.isPaused) {
+                        timer.lastUpdate = now;
+                    }
+                });
             }
         });
         
-        // Listen for beforeunload to sync before leaving
+        // Save timers before page unload
         window.addEventListener('beforeunload', () => {
-            this.syncWithServer();
+            this.saveTimersToStorage();
+        });
+        
+        // Handle browser back/forward navigation
+        window.addEventListener('pageshow', () => {
+            // Refresh timer displays when page is shown (including back button)
+            this.findAndInitializeTimers();
         });
     }
 
     destroy() {
+        // Save timers before destroying
+        this.saveTimersToStorage();
+        
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
             this.updateInterval = null;
         }
         
-        if (this.syncInterval) {
-            clearInterval(this.syncInterval);
-            this.syncInterval = null;
-        }
-        
-        this.timers.clear();
+        // Don't clear timers - they're saved in local storage
         this.initialized = false;
+    }
+    
+    // Clear all stored timers (for logout or manual reset)
+    clearAllTimers() {
+        this.timers.clear();
+        localStorage.removeItem(this.storageKey);
+        console.log('All timers cleared from local storage');
     }
 }
 

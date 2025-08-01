@@ -12,10 +12,11 @@ Preferred communication style: Simple, everyday language.
 
 ### Backend Architecture
 - **Framework**: Flask web framework with SQLAlchemy ORM
-- **Database**: SQLite (configured for easy migration to PostgreSQL)
+- **Database**: PostgreSQL (migrated from SQLite for production use)
 - **Authentication**: Flask-Login with email verification system
 - **Email**: Flask-Mail for user verification and password reset
 - **File Handling**: Werkzeug for secure file uploads (profile images)
+- **Timer Storage**: Browser Local Storage (replaced database timer storage)
 
 ### Frontend Architecture
 - **Template Engine**: Jinja2 with Bootstrap 5 dark theme
@@ -44,8 +45,9 @@ Preferred communication style: Simple, everyday language.
 
 ### Task Management
 - **Task Creation**: Users can create study tasks with time estimates
-- **Timer System**: Real-time timer functionality with pause/resume capabilities
-- **Task Completion**: Point rewards based on actual vs estimated time
+- **Timer System**: Local storage-based timer that persists through page refreshes, navigation, and logouts
+- **Timer Persistence**: Timers continue running even when user closes browser or navigates away
+- **Task Completion**: Point rewards based on task duration when timer reaches zero
 - **Daily Statistics**: Tracking of daily study patterns and performance
 
 ### Competition Features
@@ -115,9 +117,49 @@ Preferred communication style: Simple, everyday language.
 - **File Security**: Secure filename handling for uploads
 
 ### Database Migration
-- **SQLAlchemy Models**: Structured for easy migration from SQLite to PostgreSQL
+- **PostgreSQL**: Successfully migrated from SQLite to PostgreSQL
 - **Connection Pooling**: Pre-configured for production database scaling
 - **Data Integrity**: Foreign key relationships and cascading deletes properly configured
+- **Timer Data Removal**: Removed timer state from database, now handled by browser local storage
+
+## Recent Changes (August 2025)
+
+### Timer System Redesign
+- **Date**: August 1, 2025
+- **Change**: Completely redesigned timer system to use browser local storage instead of database storage
+- **Benefits**: 
+  - Timers persist through page refreshes, navigation, and even logouts
+  - Reduced server load (no more 30-second database syncs)
+  - Better user experience with instant timer state restoration
+  - No more timer resets when switching pages or losing connection
+- **Technical Details**:
+  - Removed `remaining_seconds`, `is_paused`, `is_active`, `paused_at`, `last_updated` fields from Task model
+  - Updated JavaScript TimerManager class to use localStorage API
+  - Added automatic cleanup of orphaned timers
+  - Created new `/complete_task/<id>` endpoint for task completion
+  - Updated templates to work with client-side timer management
+
+### Comprehensive Email System Implementation
+- **Date**: August 1, 2025
+- **Change**: Added complete automated email system with 11 different email types and scheduling
+- **New Email Types**:
+  1. **Verification & Security**: Email verification, password reset
+  2. **Daily Engagement**: Study reminders (6 PM IST), streak warnings (9 PM IST)
+  3. **Progress Tracking**: Weekly summaries (Sundays 10 AM IST)
+  4. **Achievement Notifications**: Rank ups, point milestones, streak milestones, hours studied
+  5. **Competition**: Challenge invitations, acceptance confirmations, results
+  6. **User Journey**: Welcome series for new users, re-engagement for inactive users
+- **Technical Implementation**:
+  - **Email Service** (`email_service.py`): Comprehensive email templates with DARKSULFOCUS branding
+  - **Email Scheduler** (`email_scheduler.py`): APScheduler-based automated email delivery
+  - **Email Preferences** (`email_preferences.py`): User preference management system
+  - **Database Schema**: Added email preference columns to User model
+  - **Real-time Integration**: Achievement emails triggered on task completion
+- **User Control**: 
+  - Master email toggle with individual preference controls
+  - Email preferences accessible via navigation "Email Settings"
+  - Preference categories: notifications, daily reminders, weekly summaries, achievements, challenges
+- **Dependencies Added**: celery, redis, apscheduler for email automation and scheduling
 
 ### Security Features
 - **CSRF Protection**: Built into all forms

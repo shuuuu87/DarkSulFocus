@@ -22,6 +22,13 @@ class User(UserMixin, db.Model):
     reset_token_expires = db.Column(db.DateTime)
     joined_date = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Email preferences
+    email_notifications = db.Column(db.Boolean, default=True)
+    daily_reminders = db.Column(db.Boolean, default=True)
+    weekly_summaries = db.Column(db.Boolean, default=True)
+    achievement_emails = db.Column(db.Boolean, default=True)
+    challenge_emails = db.Column(db.Boolean, default=True)
+    
     # Relationships
     tasks = db.relationship('Task', backref='user', lazy=True, cascade='all, delete-orphan')
     sent_challenges = db.relationship('Challenge', foreign_keys='Challenge.challenger_id', backref='challenger', lazy=True)
@@ -105,25 +112,20 @@ class Task(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     duration_minutes = db.Column(db.Integer, nullable=False)
-    remaining_seconds = db.Column(db.Integer, nullable=False)
-    is_active = db.Column(db.Boolean, default=True)
-    is_paused = db.Column(db.Boolean, default=False)
     is_completed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime)
-    paused_at = db.Column(db.DateTime)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
     
     def get_time_display(self):
-        hours = int(self.remaining_seconds // 3600)
-        minutes = int((self.remaining_seconds % 3600) // 60)
-        seconds = int(self.remaining_seconds % 60)
+        total_seconds = self.duration_minutes * 60
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        seconds = int(total_seconds % 60)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
     
     def complete_task(self):
         if not self.is_completed:
             self.is_completed = True
-            self.is_active = False
             self.completed_at = datetime.utcnow()
             
             # Calculate points earned
@@ -145,12 +147,15 @@ class Task(db.Model):
                 daily_stat.user_id = self.user_id
                 daily_stat.date = today
                 daily_stat.minutes_studied = 0
+                daily_stat.tasks_completed = 0
+                daily_stat.points_earned = 0.0
                 db.session.add(daily_stat)
             
             daily_stat.minutes_studied += total_minutes
+            daily_stat.tasks_completed += 1
+            daily_stat.points_earned += points_earned
             
             # Update user's total study time and streak
-            user = db.session.get(User, self.user_id)
             if user:
                 user.total_study_time += total_minutes
                 # Update streak

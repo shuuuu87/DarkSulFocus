@@ -48,6 +48,9 @@
             <li><a href="{{ url_for('main.profile') }}" class="{% if request.endpoint == 'main.profile' %}active{% endif %}">
                 <i class="fas fa-user"></i> Profile
             </a></li>
+            <li><a href="{{ url_for('email_prefs.manage_preferences') }}" class="{% if request.endpoint == 'email_prefs.manage_preferences' %}active{% endif %}">
+                <i class="fas fa-envelope"></i> Email Settings
+            </a></li>
             <li><a href="{{ url_for('main.progress') }}" class="{% if request.endpoint == 'main.progress' %}active{% endif %}">
                 <i class="fas fa-chart-line"></i> Your Progress
             </a></li>

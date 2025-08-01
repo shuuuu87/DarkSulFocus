@@ -64,7 +64,9 @@ def create_app():
     
     # Register blueprints
     from routes import main
+    from email_preferences import email_prefs
     app.register_blueprint(main)
+    app.register_blueprint(email_prefs)
     
     # Create tables
     with app.app_context():
@@ -73,6 +75,14 @@ def create_app():
         
         # Create upload directory
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        
+        # Start email scheduler for automated emails
+        try:
+            from email_scheduler import email_scheduler
+            email_scheduler.start()
+            app.logger.info("Email scheduler started successfully")
+        except Exception as e:
+            app.logger.error(f"Failed to start email scheduler: {e}")
     
     return app
 

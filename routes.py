@@ -7,12 +7,14 @@ from flask_mail import Message
 from werkzeug.utils import secure_filename
 from PIL import Image
 from sqlalchemy import desc
+import logging
 import pytz
 
 from app import db, mail
 from models import User, Task, Challenge, DailyStats
 from forms import LoginForm, RegisterForm, ProfileForm, TaskForm, ChallengeForm, ForgotPasswordForm, ResetPasswordForm
 from utils import send_verification_email, send_reset_email
+from email_service import EmailService
 
 main = Blueprint('main', __name__)
 
@@ -91,8 +93,8 @@ def verify_email(token):
 @main.route('/home')
 @login_required
 def home():
-    # Get user's active tasks
-    active_tasks = Task.query.filter_by(user_id=current_user.id, is_active=True, is_completed=False).all()
+    # Get user's active tasks (not completed)
+    active_tasks = Task.query.filter_by(user_id=current_user.id, is_completed=False).all()
     
     # Get today's study time for streak display
     ist = pytz.timezone('Asia/Kolkata')
@@ -114,8 +116,6 @@ def add_task():
         task.user_id = current_user.id
         task.title = form.title.data
         task.duration_minutes = form.duration_minutes.data
-        task.remaining_seconds = (form.duration_minutes.data or 0) * 60
-        task.is_paused = True  # Ensure new tasks are paused by default
         db.session.add(task)
         db.session.commit()
         flash('Task added successfully!', 'success')
@@ -126,32 +126,21 @@ def add_task():
     
     return redirect(url_for('main.home'))
 
+# Timer control routes - now handled by JavaScript/Local Storage
 @main.route('/start_timer/<int:task_id>')
 @login_required
 def start_timer(task_id):
-    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
-    
-    # Pause all other active tasks
-    other_tasks = Task.query.filter_by(user_id=current_user.id, is_active=True, is_paused=False).filter(Task.id != task_id).all()
-    for other_task in other_tasks:
-        other_task.is_paused = True
-        other_task.paused_at = datetime.utcnow()
-    
-    task.is_paused = False
-    task.paused_at = None
-    task.last_updated = datetime.utcnow()
-    db.session.commit()
-    
+    # Timer control is now handled by JavaScript local storage
+    # This route exists for backward compatibility but redirects to home
+    flash('Timer started! Control is now handled by your browser.', 'info')
     return redirect(url_for('main.home'))
 
 @main.route('/pause_timer/<int:task_id>')
 @login_required
 def pause_timer(task_id):
-    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
-    task.is_paused = True
-    task.paused_at = datetime.utcnow()
-    db.session.commit()
-    
+    # Timer control is now handled by JavaScript local storage
+    # This route exists for backward compatibility but redirects to home
+    flash('Timer paused! Control is now handled by your browser.', 'info')
     return redirect(url_for('main.home'))
 
 @main.route('/delete_task/<int:task_id>')
@@ -164,27 +153,61 @@ def delete_task(task_id):
     
     return redirect(url_for('main.home'))
 
-@main.route('/update_timer', methods=['POST'])
+@main.route('/complete_task/<int:task_id>', methods=['POST'])
 @login_required
-def update_timer():
-    data = request.get_json()
-    task_id = data.get('task_id')
-    remaining_seconds = data.get('remaining_seconds')
+def complete_task_route(task_id):
+    """Complete a task - called when timer reaches zero"""
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id, is_completed=False).first()
     
-    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first()
-    if task and not task.is_paused:
-        task.remaining_seconds = max(0, remaining_seconds)
-        task.last_updated = datetime.utcnow()
+    if task:
+        # Store old values for achievement checking
+        old_rank = current_user.get_rank()
+        old_points = current_user.total_points
+        old_streak = current_user.current_streak
+        old_hours = current_user.total_study_time // 60
         
-        if task.remaining_seconds <= 0:
-            points_earned = task.complete_task()
-            db.session.commit()
-            return jsonify({'completed': True, 'points_earned': points_earned})
-        
+        points_earned = task.complete_task()
         db.session.commit()
-        return jsonify({'success': True})
+        
+        # Check for achievements and send emails if enabled
+        if current_user.achievement_emails:
+            # Check for rank up
+            new_rank = current_user.get_rank()
+            if old_rank != new_rank:
+                EmailService.send_achievement_unlock(current_user, 'rank_up', {
+                    'old_rank': old_rank,
+                    'new_rank': new_rank
+                })
+            
+            # Check for points milestones (every 100 points)
+            if (int(old_points) // 100) < (int(current_user.total_points) // 100):
+                milestone = (int(current_user.total_points) // 100) * 100
+                EmailService.send_achievement_unlock(current_user, 'points_milestone', {
+                    'points': milestone
+                })
+            
+            # Check for streak milestones
+            if current_user.current_streak != old_streak and current_user.current_streak in [7, 30, 100, 365]:
+                EmailService.send_achievement_unlock(current_user, 'streak_milestone', {
+                    'days': current_user.current_streak
+                })
+            
+            # Check for hours milestones (every 10 hours)
+            new_hours = current_user.total_study_time // 60
+            if (old_hours // 10) < (new_hours // 10):
+                milestone_hours = (new_hours // 10) * 10
+                EmailService.send_achievement_unlock(current_user, 'hours_milestone', {
+                    'hours': milestone_hours
+                })
+        
+        return jsonify({
+            'success': True, 
+            'completed': True, 
+            'points_earned': points_earned,
+            'message': f'Task completed! You earned {points_earned:.1f} points.'
+        })
     
-    return jsonify({'error': 'Task not found or paused'})
+    return jsonify({'error': 'Task not found or already completed'})
 
 @main.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -332,8 +355,8 @@ def leaderboard():
     leaderboard_data = []
     for i, user in enumerate(top_users, 1):
         # Calculate last active (last completed task or task creation)
-        last_completed_task = Task.query.filter_by(user_id=user.id, is_completed=True).order_by(desc(Task.completed_at)).first()
-        last_any_task = Task.query.filter_by(user_id=user.id).order_by(desc(Task.created_at)).first()
+        last_completed_task = Task.query.filter_by(user_id=user.id, is_completed=True).order_by(Task.completed_at.desc()).first()
+        last_any_task = Task.query.filter_by(user_id=user.id).order_by(Task.created_at.desc()).first()
         
         if last_completed_task and last_completed_task.completed_at:
             last_active = last_completed_task.completed_at
@@ -356,6 +379,20 @@ def leaderboard():
 @main.route('/help')
 def help():
     return render_template('help.html')
+
+@main.route('/test-email')
+@login_required
+def test_email():
+    """Test email functionality (development only)"""
+    if current_user.achievement_emails:
+        EmailService.send_achievement_unlock(current_user, 'rank_up', {
+            'old_rank': 'Initiate',
+            'new_rank': 'Grinder'
+        })
+        flash('Test achievement email sent!', 'success')
+    else:
+        flash('Achievement emails are disabled in your preferences.', 'info')
+    return redirect(url_for('main.home'))
 
 @main.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
