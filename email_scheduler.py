@@ -5,6 +5,24 @@ import pytz
 import logging
 
 class EmailScheduler:
+    def send_super_motivation_emails(self):
+        """Send super motivation emails to all users"""
+        from app import db, app
+        from models import User
+        from email_service import EmailService
+        with app.app_context():
+            try:
+                users = db.session.query(User).filter(
+                    User.is_verified == True,
+                    User.email_notifications == True
+                ).all()
+                count = 0
+                for user in users:
+                    if EmailService.send_super_motivation_email(user):
+                        count += 1
+                logging.info(f"Sent {count} super motivation emails")
+            except Exception as e:
+                logging.error(f"Error sending super motivation emails: {e}")
     """Background email scheduler for automated email campaigns"""
     
     def __init__(self):
@@ -14,48 +32,57 @@ class EmailScheduler:
     def setup_jobs(self):
         """Setup all scheduled email jobs"""
         
-        # Daily reminder emails at 6 PM IST
+        # Daily reminder emails at 10 AM IST
         self.scheduler.add_job(
             func=self.send_daily_reminders,
-            trigger=CronTrigger(hour=18, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
+            trigger=CronTrigger(hour=10, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
             id='daily_reminders',
             name='Send daily study reminders',
             replace_existing=True
         )
-        
-        # Streak warning emails at 9 PM IST
+
+        # Streak warning emails at 7 AM IST
         self.scheduler.add_job(
             func=self.send_streak_warnings,
-            trigger=CronTrigger(hour=21, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
+            trigger=CronTrigger(hour=7, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
             id='streak_warnings',
             name='Send streak warning emails',
             replace_existing=True
         )
-        
-        # Weekly progress emails every Sunday at 10 AM IST
+
+        # Weekly progress emails every Sunday at 11 AM IST
         self.scheduler.add_job(
             func=self.send_weekly_progress,
-            trigger=CronTrigger(day_of_week=6, hour=10, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
+            trigger=CronTrigger(day_of_week=6, hour=11, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
             id='weekly_progress',
             name='Send weekly progress summaries',
             replace_existing=True
         )
-        
-        # Re-engagement emails every day at 11 AM IST
+
+        # Re-engagement emails every day at 12 PM IST
         self.scheduler.add_job(
             func=self.send_reengagement_emails,
-            trigger=CronTrigger(hour=11, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
+            trigger=CronTrigger(hour=12, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
             id='reengagement',
             name='Send re-engagement emails',
             replace_existing=True
         )
-        
-        # Welcome series emails every day at 2 PM IST
+
+        # Welcome series emails every day at 9 AM IST
         self.scheduler.add_job(
             func=self.send_welcome_series,
-            trigger=CronTrigger(hour=14, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
+            trigger=CronTrigger(hour=9, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
             id='welcome_series',
             name='Send welcome series emails',
+            replace_existing=True
+        )
+
+        # Super motivation emails every day at 12:30 PM IST
+        self.scheduler.add_job(
+            func=self.send_super_motivation_emails,
+            trigger=CronTrigger(hour=12, minute=30, timezone=pytz.timezone('Asia/Kolkata')),
+            id='super_motivation',
+            name='Send super motivation emails',
             replace_existing=True
         )
     
@@ -76,9 +103,9 @@ class EmailScheduler:
         from app import db
         from models import User, DailyStats
         from email_service import EmailService
-        from flask import current_app
+        from app import app
         
-        with current_app.app_context():
+        with app.app_context():
             try:
                 ist = pytz.timezone('Asia/Kolkata')
                 today = datetime.now(ist).date()
@@ -111,9 +138,9 @@ class EmailScheduler:
         from app import db
         from models import User, DailyStats
         from email_service import EmailService
-        from flask import current_app
+        from app import app
         
-        with current_app.app_context():
+        with app.app_context():
             try:
                 ist = pytz.timezone('Asia/Kolkata')
                 today = datetime.now(ist).date()
@@ -147,9 +174,9 @@ class EmailScheduler:
         from app import db
         from models import User, DailyStats
         from email_service import EmailService
-        from flask import current_app
+        from app import app
         
-        with current_app.app_context():
+        with app.app_context():
             try:
                 # Get all active users
                 active_users = db.session.query(User).filter(
@@ -172,9 +199,9 @@ class EmailScheduler:
         from app import db
         from models import User, DailyStats
         from email_service import EmailService
-        from flask import current_app
+        from app import app
         
-        with current_app.app_context():
+        with app.app_context():
             try:
                 ist = pytz.timezone('Asia/Kolkata')
                 week_ago = datetime.now(ist).date() - timedelta(days=7)
@@ -208,9 +235,9 @@ class EmailScheduler:
         from app import db
         from models import User, DailyStats
         from email_service import EmailService
-        from flask import current_app
+        from app import app
         
-        with current_app.app_context():
+        with app.app_context():
             try:
                 today = datetime.utcnow().date()
                 yesterday = today - timedelta(days=1)

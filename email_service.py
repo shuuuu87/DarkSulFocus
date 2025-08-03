@@ -1,9 +1,41 @@
+
 from flask import url_for, current_app
 from flask_mail import Message
 from datetime import datetime, timedelta
 import pytz
+from models import DailyStats
 
 class EmailService:
+
+    @staticmethod
+    def send_super_motivation_email(user):
+        """Send a super motivation email to the user"""
+        template = EmailService.get_email_template_base()
+        msg = Message(
+            'Super Motivation: You Can Do It! 💪',
+            recipients=[user.email]
+        )
+        msg.html = f'''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="{template['header_style']}">
+                <h1 style="color: {template['brand_color']}; margin: 0;">DARKSULFOCUS</h1>
+                <p style="color: #cccccc; margin: 10px 0 0 0;">Super Motivation</p>
+            </div>
+            <div style="{template['body_style']}">
+                <h2 style="color: {template['heading_color']}; margin-top: 0;">Keep Going, You're Amazing!</h2>
+                <p style="color: {template['text_color']}; line-height: 1.6;">
+                    Remember, every small step you take brings you closer to your goals. Stay focused, stay positive, and never give up!<br><br>
+                    <b>You have the power to achieve great things. Let's make today count!</b>
+                </p>
+            </div>
+            <div style="{template['footer_style']}">
+                <p style="color: #888; margin: 0; font-size: 12px;">
+                    This is your daily boost from DARKSULFOCUS. You got this!
+                </p>
+            </div>
+        </div>
+        '''
+        return EmailService._send_email(msg)
     """Comprehensive email service for DARKSULFOCUS"""
     
     @staticmethod

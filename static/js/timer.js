@@ -32,8 +32,15 @@ class TimerManager {
             if (storedTimers) {
                 const timersData = JSON.parse(storedTimers);
                 Object.entries(timersData).forEach(([taskId, timerData]) => {
+                    let remainingSeconds = timerData.remainingSeconds;
+                    // If endTimestamp is present and not paused, calculate remaining
+                    if (timerData.endTimestamp && !timerData.isPaused) {
+                        const now = Date.now();
+                        remainingSeconds = Math.max(0, Math.ceil((timerData.endTimestamp - now) / 1000));
+                    }
                     this.timers.set(taskId, {
                         ...timerData,
+                        remainingSeconds: remainingSeconds,
                         lastUpdate: Date.now(),
                         element: null, // Will be set when DOM elements are found
                         taskItem: null
@@ -51,13 +58,19 @@ class TimerManager {
         try {
             const timersData = {};
             this.timers.forEach((timer, taskId) => {
-                timersData[taskId] = {
-                    remainingSeconds: timer.remainingSeconds,
+                // Save endTimestamp if running, remainingSeconds if paused
+                let timerData = {
                     isPaused: timer.isPaused,
                     totalDuration: timer.totalDuration,
                     title: timer.title,
                     lastUpdate: timer.lastUpdate
                 };
+                if (!timer.isPaused && timer.endTimestamp) {
+                    timerData.endTimestamp = timer.endTimestamp;
+                } else {
+                    timerData.remainingSeconds = Math.ceil(timer.remainingSeconds);
+                }
+                timersData[taskId] = timerData;
             });
             localStorage.setItem(this.storageKey, JSON.stringify(timersData));
         } catch (error) {
@@ -153,34 +166,21 @@ class TimerManager {
     updateActiveTimers() {
         const now = Date.now();
         let needsSave = false;
-        
         this.timers.forEach((timer, taskId) => {
-            if (!timer.isPaused && timer.remainingSeconds > 0) {
-                // Calculate elapsed time since last update (in seconds, can be fractional)
-                const elapsed = (now - timer.lastUpdate) / 1000;
-                if (elapsed >= 0.1) { // update at least every 100ms for smoothness
-                    const prevSeconds = Math.ceil(timer.remainingSeconds);
-                    timer.remainingSeconds = Math.max(0, timer.remainingSeconds - elapsed);
-                    timer.lastUpdate = now;
-                    needsSave = true;
-                    
-                    // Only update DOM if value changed
-                    if (Math.ceil(timer.remainingSeconds) !== prevSeconds) {
-                        this.updateTimerDisplay(taskId);
-                    }
-                    
-                    // Check if timer completed
-                    if (timer.remainingSeconds <= 0) {
-                        this.handleTimerCompletion(taskId);
-                    }
+            if (!timer.isPaused && timer.endTimestamp && timer.remainingSeconds > 0) {
+                const prevSeconds = Math.ceil(timer.remainingSeconds);
+                timer.remainingSeconds = Math.max(0, Math.ceil((timer.endTimestamp - now) / 1000));
+                timer.lastUpdate = now;
+                // Only update DOM if value changed
+                if (Math.ceil(timer.remainingSeconds) !== prevSeconds) {
+                    this.updateTimerDisplay(taskId);
+                }
+                // Check if timer completed
+                if (timer.remainingSeconds <= 0) {
+                    this.handleTimerCompletion(taskId);
                 }
             }
         });
-        
-        // Save to storage if any timer was updated
-        if (needsSave) {
-            this.saveTimersToStorage();
-        }
     }
 
     updateTimerDisplay(taskId) {
@@ -380,26 +380,30 @@ class TimerManager {
 
     pauseTimer(taskId) {
         const timer = this.timers.get(taskId);
-        if (timer) {
+        if (timer && !timer.isPaused) {
+            // Calculate remainingSeconds from endTimestamp
+            if (timer.endTimestamp) {
+                timer.remainingSeconds = Math.max(0, Math.ceil((timer.endTimestamp - Date.now()) / 1000));
+                delete timer.endTimestamp;
+            }
             timer.isPaused = true;
             this.updateTimerVisualState(timer);
             this.saveTimersToStorage();
-            
             console.log(`Timer ${taskId} paused`);
         }
     }
 
     resumeTimer(taskId) {
         const timer = this.timers.get(taskId);
-        if (timer) {
+        if (timer && timer.isPaused && timer.remainingSeconds > 0) {
             // Pause all other timers first (only one timer can run at a time)
             this.pauseAllTimers();
-            
             timer.isPaused = false;
             timer.lastUpdate = Date.now();
+            // Set endTimestamp for real-time tracking
+            timer.endTimestamp = Date.now() + timer.remainingSeconds * 1000;
             this.updateTimerVisualState(timer);
             this.saveTimersToStorage();
-            
             console.log(`Timer ${taskId} resumed`);
         }
     }
@@ -429,11 +433,10 @@ class TimerManager {
             title: title,
             element: null,
             taskItem: null
+            // endTimestamp will be set on resume
         };
-        
         this.timers.set(taskId, timer);
         this.saveTimersToStorage();
-        
         return timer;
     }
 
