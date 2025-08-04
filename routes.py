@@ -353,18 +353,24 @@ def leaderboard():
     top_users = User.query.order_by(User.total_points.desc()).limit(10).all()
     
     leaderboard_data = []
+    ist = pytz.timezone('Asia/Kolkata')
     for i, user in enumerate(top_users, 1):
         # Calculate last active (last completed task or task creation)
         last_completed_task = Task.query.filter_by(user_id=user.id, is_completed=True).order_by(Task.completed_at.desc()).first()
         last_any_task = Task.query.filter_by(user_id=user.id).order_by(Task.created_at.desc()).first()
-        
+
         if last_completed_task and last_completed_task.completed_at:
-            last_active = last_completed_task.completed_at
+            last_active_utc = last_completed_task.completed_at
         elif last_any_task:
-            last_active = last_any_task.created_at
+            last_active_utc = last_any_task.created_at
         else:
-            last_active = user.joined_date
-        
+            last_active_utc = user.joined_date
+
+        # Convert UTC to Asia/Kolkata
+        if last_active_utc and last_active_utc.tzinfo is None:
+            last_active_utc = last_active_utc.replace(tzinfo=pytz.utc)
+        last_active = last_active_utc.astimezone(ist) if last_active_utc else None
+
         leaderboard_data.append({
             'rank': i,
             'user': user,

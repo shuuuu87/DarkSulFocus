@@ -73,8 +73,22 @@
                                         </div>
                                     </td>
                                     <td>
+                                        {% set badge_map = {
+                                            'Dormant': 'badge1.png',
+                                            'Initiate': 'badge2.png',
+                                            'Grinder': 'badge3.png',
+                                            'Executor': 'badge4.png',
+                                            'Obsessor': 'badge5.png',
+                                            'Disciplinar': 'badge6.png',
+                                            'Sentinel': 'badge7.png',
+                                            'Dominus': 'badge8.png',
+                                            'Phantom': 'badge9.png',
+                                            'Apex Mind': 'badge10.png',
+                                            'System Override': 'badge11.png',
+                                            'Darkensul Core': 'badge12.png'
+                                        } %}
                                         <span class="badge rank-badge rank-{{ entry.rank_name.lower().replace(' ', '-') }}">
-                                            {{ entry.rank_name }}
+                                            <img src="/static/img/badges/{{ badge_map.get(entry.rank_name, 'badge1.png') }}" alt="{{ entry.rank_name }} Badge" class="badge-img" style="height: 60px; width: 60px;">
                                         </span>
                                     </td>
                                     <td class="text-center">

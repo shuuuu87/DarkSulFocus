@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import pytz
 
 class User(UserMixin, db.Model):
+    last_active = db.Column(db.DateTime)
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
@@ -84,25 +85,43 @@ class User(UserMixin, db.Model):
     def update_streak(self, study_minutes_today):
         ist = pytz.timezone('Asia/Kolkata')
         today = datetime.now(ist).date()
-        
+
+        if not hasattr(self, 'grace_days_used') or self.grace_days_used is None:
+            self.grace_days_used = 0
+        if not hasattr(self, 'last_missed_date'):
+            self.last_missed_date = None
+
         if study_minutes_today >= 120:  # 2 hours = 120 minutes
             if self.last_study_date:
                 days_diff = (today - self.last_study_date).days
-                
+
                 if days_diff == 1:  # Consecutive day
                     self.current_streak += 1
-                    self.grace_days_used = 0
-                elif days_diff == 2 and self.grace_days_used == 0:  # 1 day gap with grace
-                    self.current_streak += 1
-                    self.grace_days_used = 1
-                elif days_diff > 2 or (days_diff == 2 and self.grace_days_used > 0):  # Reset streak
+                    self.last_missed_date = None
+                elif days_diff == 2:
+                    # Missed one day
+                    if self.last_missed_date == self.last_study_date:  # Consecutive miss
+                        self.current_streak = 1
+                        self.grace_days_used = 0
+                        self.last_missed_date = None
+                    elif self.grace_days_used < 5:
+                        self.current_streak += 1
+                        self.grace_days_used += 1
+                        self.last_missed_date = self.last_study_date + timedelta(days=1)
+                    else:
+                        self.current_streak = 1
+                        self.grace_days_used = 0
+                        self.last_missed_date = None
+                elif days_diff > 2:
                     self.current_streak = 1
                     self.grace_days_used = 0
+                    self.last_missed_date = None
                 # Same day doesn't change streak
             else:
                 self.current_streak = 1
                 self.grace_days_used = 0
-            
+                self.last_missed_date = None
+
             self.last_study_date = today
             if self.current_streak > self.max_streak:
                 self.max_streak = self.current_streak

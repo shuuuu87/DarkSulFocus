@@ -21,19 +21,37 @@ csrf = CSRFProtect()
 
 def create_app():
     app = Flask(__name__)
-    
+
+    # Track user activity on every request (must be after app is created)
+    from flask_login import current_user
+    from datetime import datetime
+
+    @app.before_request
+    def update_last_active():
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+            from models import db, User
+            now = datetime.utcnow()
+            if not current_user.last_active or (now - current_user.last_active).total_seconds() > 60:
+                current_user.last_active = now
+                db.session.commit()
+
     # Configuration
     app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-change-in-production-" + str(hash("darksulfocus")))
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-    
+
     # Database configuration
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        # Ensure instance directory exists
+        os.makedirs(os.path.join(app.root_path, '..', 'instance'), exist_ok=True)
+        db_url = "sqlite:///" + os.path.abspath(os.path.join(app.root_path, '..', 'instance', 'darksulfocus.db'))
+    app.config["SQLALCHEMY_DATABASE_URI"] = db_url
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "pool_recycle": 300,
         "pool_pre_ping": True,
     }
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    
+
     # Mail configuration
     app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
     app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', '587'))
@@ -41,17 +59,17 @@ def create_app():
     app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
     app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
     app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@darksulfocus.com')
-    
+
     # Upload configuration
     app.config['UPLOAD_FOLDER'] = 'static/uploads'
     app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB max file size
-    
+
     # Initialize extensions
     db.init_app(app)
     login_manager.init_app(app)
     mail.init_app(app)
     csrf.init_app(app)
-    
+
     # Login manager configuration
     login_manager.login_view = 'main.login'
     login_manager.login_message = 'Please log in to access this page.'

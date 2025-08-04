@@ -1,3 +1,47 @@
+.rank-badge .badge-img {
+    background: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+.rank-badge .badge-img + * {
+    background: none !important;
+}
+.rank-badge {
+    background: none !important;
+    border-radius: 0 !important;
+    width: auto;
+    height: auto;
+    padding: 0;
+    font-size: inherit;
+    font-weight: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+/* Remove background and border-radius from rank-badge if it contains a badge image */
+.rank-badge > .badge-img {
+    background: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+.rank-badge {
+    background: none;
+    border-radius: 0;
+    padding: 0;
+    font-size: inherit;
+    font-weight: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+/* Badge image size for rank badges */
+.badge-img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    border-radius: 50%;
+    display: block;
+}
 /* Dark Theme Variables */
 :root {
     --bg-primary: #1a1a1a;
