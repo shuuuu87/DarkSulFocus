@@ -38,6 +38,11 @@ def create_app():
     # Configuration
     app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-change-in-production-" + str(hash("darksulfocus")))
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    
+    # Server configuration for URL generation
+    app.config['SERVER_NAME'] = os.environ.get('REPLIT_DOMAINS', 'localhost:5000').split(',')[0]
+    app.config['APPLICATION_ROOT'] = '/'
+    app.config['PREFERRED_URL_SCHEME'] = 'https' if os.environ.get('REPLIT_DOMAINS') else 'http'
 
     # Database configuration
     db_url = os.environ.get("DATABASE_URL")
@@ -101,6 +106,14 @@ def create_app():
             app.logger.info("Email scheduler started successfully")
         except Exception as e:
             app.logger.error(f"Failed to start email scheduler: {e}")
+        
+        # Start background timer service for auto-completion
+        try:
+            from background_timer import background_timer_service
+            background_timer_service.start()
+            app.logger.info("Background timer service started successfully")
+        except Exception as e:
+            app.logger.error(f"Failed to start background timer service: {e}")
     
     return app
 

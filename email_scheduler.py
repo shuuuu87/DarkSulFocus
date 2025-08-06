@@ -32,28 +32,28 @@ class EmailScheduler:
     def setup_jobs(self):
         """Setup all scheduled email jobs"""
         
-        # Daily reminder emails at 10 AM IST
+        # Daily reminder emails at 6 PM IST (18:00)
         self.scheduler.add_job(
             func=self.send_daily_reminders,
-            trigger=CronTrigger(hour=10, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
+            trigger=CronTrigger(hour=18, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
             id='daily_reminders',
             name='Send daily study reminders',
             replace_existing=True
         )
 
-        # Streak warning emails at 7 AM IST
+        # Streak warning emails at 9 PM IST (21:00)
         self.scheduler.add_job(
             func=self.send_streak_warnings,
-            trigger=CronTrigger(hour=7, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
+            trigger=CronTrigger(hour=21, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
             id='streak_warnings',
             name='Send streak warning emails',
             replace_existing=True
         )
 
-        # Weekly progress emails every Sunday at 11 AM IST
+        # Weekly progress emails every Sunday at 10 AM IST
         self.scheduler.add_job(
             func=self.send_weekly_progress,
-            trigger=CronTrigger(day_of_week=6, hour=11, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
+            trigger=CronTrigger(day_of_week=6, hour=10, minute=0, timezone=pytz.timezone('Asia/Kolkata')),
             id='weekly_progress',
             name='Send weekly progress summaries',
             replace_existing=True
@@ -112,8 +112,8 @@ class EmailScheduler:
                 
                 # Get users who haven't studied today and are active
                 users_to_remind = db.session.query(User).filter(
-                    User.is_verified == True,
-                    User.email_notifications == True  # Assuming we add this preference
+                    User.is_verified.is_(True),
+                    User.daily_reminders.is_(True)
                 ).all()
                 
                 reminder_count = 0
@@ -148,8 +148,8 @@ class EmailScheduler:
                 # Get users with active streaks who haven't studied today
                 users_at_risk = db.session.query(User).filter(
                     User.current_streak > 0,
-                    User.is_verified == True,
-                    User.email_notifications == True
+                    User.is_verified.is_(True),
+                    User.email_notifications.is_(True)
                 ).all()
                 
                 warning_count = 0
@@ -180,8 +180,8 @@ class EmailScheduler:
             try:
                 # Get all active users
                 active_users = db.session.query(User).filter(
-                    User.is_verified == True,
-                    User.email_notifications == True
+                    User.is_verified.is_(True),
+                    User.weekly_summaries.is_(True)
                 ).all()
                 
                 progress_count = 0
@@ -208,8 +208,8 @@ class EmailScheduler:
                 
                 # Find users who haven't studied in the last 7 days
                 inactive_users = db.session.query(User).filter(
-                    User.is_verified == True,
-                    User.email_notifications == True
+                    User.is_verified.is_(True),
+                    User.email_notifications.is_(True)
                 ).all()
                 
                 reengagement_count = 0
@@ -244,9 +244,9 @@ class EmailScheduler:
                 
                 # Find users who registered yesterday (for day 1 email)
                 new_users = db.session.query(User).filter(
-                    User.created_at >= yesterday,
-                    User.created_at < today,
-                    User.is_verified == True
+                    User.joined_date >= yesterday,
+                    User.joined_date < today,
+                    User.is_verified.is_(True)
                 ).all()
                 
                 welcome_count = 0

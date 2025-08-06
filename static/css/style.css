@@ -366,6 +366,36 @@ body {
     font-weight: 600;
 }
 
+/* Password Toggle Button */
+.input-group .btn-outline-secondary {
+    border-color: var(--border-color);
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    transition: all 0.3s ease;
+}
+
+.input-group .btn-outline-secondary:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.input-group .btn-outline-secondary:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 255, 136, 0.25);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.input-group .form-control {
+    border-right: none;
+}
+
+.input-group .btn-outline-secondary {
+    border-left: none;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
 /* Stats Cards */
 .stat-card {
     background: var(--bg-secondary);
@@ -432,6 +462,22 @@ body {
 .task-item.paused {
     border-color: var(--accent-warning);
     background: linear-gradient(135deg, var(--bg-tertiary), rgba(255, 193, 7, 0.1));
+}
+
+/* Mobile-specific timer states */
+.task-item.was-backgrounded {
+    border-color: #17a2b8;
+    background: linear-gradient(135deg, var(--bg-tertiary), rgba(23, 162, 184, 0.15));
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+}
+
+.task-item.was-backgrounded::before {
+    content: "📱";
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 1.2rem;
+    opacity: 0.8;
 }
 
 .task-header {

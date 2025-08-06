@@ -10,6 +10,8 @@ class TimerManager {
         this.updateInterval = null;
         this.initialized = false;
         this.storageKey = 'darksulfocus_timers';
+        this.isPageVisible = !document.hidden;
+        this.backgroundStartTime = null;
         
         this.init();
     }
@@ -164,6 +166,11 @@ class TimerManager {
     // No server sync needed - using local storage only
 
     updateActiveTimers() {
+        // Don't update timers if page is not visible to save battery
+        if (!this.isPageVisible) {
+            return;
+        }
+        
         const now = Date.now();
         let needsSave = false;
         this.timers.forEach((timer, taskId) => {
@@ -200,6 +207,7 @@ class TimerManager {
         
         // Remove existing state classes
         element.classList.remove('timer-warning', 'timer-danger', 'timer-completed');
+        taskItem?.classList.remove('paused');
         
         if (timer.remainingSeconds <= 0) {
             element.classList.add('timer-completed');
@@ -227,14 +235,22 @@ class TimerManager {
         if (!controlsDiv) return;
         
         // Find the existing play/pause button
-        const existingButton = controlsDiv.querySelector('.btn-success, .btn-warning');
+        const existingButton = controlsDiv.querySelector('.btn-success, .btn-warning, .btn-info');
         if (!existingButton) return;
         
         // Create new button based on state
         const newButton = document.createElement('a');
         newButton.href = '#';
-        newButton.className = isPaused ? 'btn btn-success btn-sm' : 'btn btn-warning btn-sm';
-        newButton.innerHTML = isPaused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+        
+        if (isPaused) {
+            newButton.className = 'btn btn-success btn-sm';
+            newButton.innerHTML = '<i class="fas fa-play"></i>';
+            newButton.title = 'Start timer';
+        } else {
+            newButton.className = 'btn btn-warning btn-sm';
+            newButton.innerHTML = '<i class="fas fa-pause"></i>';
+            newButton.title = 'Pause timer';
+        }
         
         // Replace the existing button
         existingButton.replaceWith(newButton);
@@ -308,12 +324,12 @@ class TimerManager {
         this.updatePointsDisplay(pointsEarned);
     }
 
-    showCompletionNotification(taskId) {
+    showCompletionNotification(taskId, pointsEarned = 0) {
         // Browser notification
         if (window.DarkSulFocus?.showNotification) {
             window.DarkSulFocus.showNotification(
                 'Task Completed!',
-                'Congratulations! You have completed your study task.',
+                `Congratulations! You earned ${pointsEarned.toFixed(1)} points.`,
                 '/static/favicon.ico'
             );
         }
@@ -381,6 +397,9 @@ class TimerManager {
     pauseTimer(taskId) {
         const timer = this.timers.get(taskId);
         if (timer && !timer.isPaused) {
+            // Pause server-side timer
+            this.pauseServerTimer(taskId);
+            
             // Calculate remainingSeconds from endTimestamp
             if (timer.endTimestamp) {
                 timer.remainingSeconds = Math.max(0, Math.ceil((timer.endTimestamp - Date.now()) / 1000));
@@ -396,16 +415,131 @@ class TimerManager {
     resumeTimer(taskId) {
         const timer = this.timers.get(taskId);
         if (timer && timer.isPaused && timer.remainingSeconds > 0) {
+            // Start server-side timer first
+            this.startServerTimer(taskId);
+            
             // Pause all other timers first (only one timer can run at a time)
             this.pauseAllTimers();
             timer.isPaused = false;
             timer.lastUpdate = Date.now();
             // Set endTimestamp for real-time tracking
             timer.endTimestamp = Date.now() + timer.remainingSeconds * 1000;
+            
+            // Remove any background state flags
+            delete timer.wasRunningWhenBackgrounded;
+            
             this.updateTimerVisualState(timer);
             this.saveTimersToStorage();
-            console.log(`Timer ${taskId} resumed`);
+            console.log(`Timer ${taskId} resumed - running continuously on server`);
         }
+    }
+    
+    async startServerTimer(taskId) {
+        try {
+            const response = await fetch(`/start_server_timer/${taskId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                console.log(`Server timer started for task ${taskId}`);
+            }
+        } catch (error) {
+            console.error('Error starting server timer:', error);
+        }
+    }
+    
+    async pauseServerTimer(taskId) {
+        try {
+            const response = await fetch(`/pause_server_timer/${taskId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                console.log(`Server timer paused for task ${taskId}`);
+            }
+        } catch (error) {
+            console.error('Error pausing server timer:', error);
+        }
+    }
+    
+    async checkServerCompletion(taskId) {
+        try {
+            const response = await fetch(`/get_timer_status/${taskId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+            
+            const data = await response.json();
+            if (data.success && data.completed) {
+                // Server says task is completed
+                console.log(`Server confirmed task ${taskId} completed with ${data.points_earned} points`);
+                this.handleServerCompletion(taskId, data.points_earned);
+                return true;
+            } else if (data.success && !data.completed && !data.is_completed) {
+                // Task exists but not completed - update remaining time if different
+                const timer = this.timers.get(taskId);
+                if (timer && data.remaining_seconds !== undefined) {
+                    timer.remainingSeconds = data.remaining_seconds;
+                    this.updateTimerDisplay(taskId);
+                }
+            } else if (!data.success && data.error === 'Task not found') {
+                // Task was deleted on server, remove from client
+                console.log(`Task ${taskId} not found on server - removing from client`);
+                this.timers.delete(taskId);
+                this.saveTimersToStorage();
+                return true; // Treat as completed to stop further processing
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking server completion:', error);
+            return false;
+        }
+    }
+    
+    handleServerCompletion(taskId, pointsEarned) {
+        console.log(`Task ${taskId} completed on server, points: ${pointsEarned}`);
+        
+        // Get timer reference before deleting
+        const timer = this.timers.get(taskId);
+        
+        // Remove timer from local storage immediately
+        this.timers.delete(taskId);
+        this.saveTimersToStorage();
+        
+        // Show completion notification once
+        this.showCompletionNotification(taskId, pointsEarned);
+        
+        // Remove task from DOM with animation
+        if (timer?.taskItem) {
+            timer.taskItem.style.transition = 'opacity 0.5s ease';
+            timer.taskItem.style.opacity = '0';
+            setTimeout(() => {
+                if (timer.taskItem && timer.taskItem.parentNode) {
+                    timer.taskItem.remove();
+                }
+            }, 500);
+        }
+        
+        // Refresh page after a short delay to show updated stats
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
+        
+        // Play completion sound
+        this.playCompletionSound();
     }
 
     pauseAllTimers() {
@@ -492,17 +626,27 @@ class TimerManager {
             }
         });
         
-        // Listen for page visibility changes to update lastUpdate times
+        // Enhanced mobile-friendly page visibility handling
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                // Update lastUpdate for all active timers when page becomes visible
-                const now = Date.now();
-                this.timers.forEach((timer, taskId) => {
-                    if (!timer.isPaused) {
-                        timer.lastUpdate = now;
-                    }
-                });
-            }
+            this.handleVisibilityChange();
+        });
+        
+        // Additional mobile browser events for better detection
+        window.addEventListener('blur', () => {
+            this.handlePageBackgrounded();
+        });
+        
+        window.addEventListener('focus', () => {
+            this.handlePageForegrounded();
+        });
+        
+        // Mobile Safari specific events
+        window.addEventListener('pagehide', () => {
+            this.handlePageBackgrounded();
+        });
+        
+        window.addEventListener('pageshow', () => {
+            this.handlePageForegrounded();
         });
         
         // Save timers before page unload
@@ -510,11 +654,106 @@ class TimerManager {
             this.saveTimersToStorage();
         });
         
-        // Handle browser back/forward navigation
-        window.addEventListener('pageshow', () => {
-            // Refresh timer displays when page is shown (including back button)
-            this.findAndInitializeTimers();
+        // Force check for completed timers on any interaction
+        ['touchstart', 'click', 'keydown'].forEach(eventType => {
+            document.addEventListener(eventType, () => {
+                this.checkForCompletedTimers();
+            }, { passive: true });
         });
+    }
+
+    handleVisibilityChange() {
+        if (document.visibilityState === 'visible') {
+            this.handlePageForegrounded();
+        } else {
+            this.handlePageBackgrounded();
+        }
+    }
+    
+    handlePageBackgrounded() {
+        console.log('Page backgrounded - timers continue running on server');
+        this.isPageVisible = false;
+        this.backgroundStartTime = Date.now();
+        
+        // DON'T pause timers - let them continue running on server
+        // Just stop client-side display updates to save battery
+        this.saveTimersToStorage();
+    }
+    
+    handlePageForegrounded() {
+        console.log('Page foregrounded - checking for completed timers');
+        this.isPageVisible = true;
+        
+        const now = Date.now();
+        const backgroundDuration = this.backgroundStartTime ? 
+            Math.floor((now - this.backgroundStartTime) / 1000) : 0;
+        
+        if (backgroundDuration > 0) {
+            console.log(`Was in background for ${backgroundDuration} seconds`);
+        }
+        
+        // Check for server-side completed timers first
+        this.checkForCompletedTimers();
+        
+        // Update timer displays
+        this.findAndInitializeTimers();
+        
+        this.backgroundStartTime = null;
+        this.saveTimersToStorage();
+    }
+    
+    async checkForCompletedTimers() {
+        let hasCompletedTimers = false;
+        const now = Date.now();
+        
+        // Create array copy to avoid modification during iteration
+        const timerEntries = Array.from(this.timers.entries());
+        
+        // Check all timers for completion
+        for (const [taskId, timer] of timerEntries) {
+            // Skip if timer was already removed
+            if (!this.timers.has(taskId)) {
+                continue;
+            }
+            
+            // First check server-side completion
+            const serverCompleted = await this.checkServerCompletion(taskId);
+            if (serverCompleted) {
+                hasCompletedTimers = true;
+                continue; // Server handled completion, skip client-side checks
+            }
+            
+            // Then check client-side completion only if server didn't complete it
+            if (this.timers.has(taskId)) { // Double-check timer still exists
+                // Check if timer was supposed to complete while in background
+                if (timer.endTimestamp && timer.endTimestamp <= now) {
+                    console.log(`Found client-side completed timer: ${taskId}`);
+                    hasCompletedTimers = true;
+                    timer.remainingSeconds = 0;
+                    timer.isPaused = true;
+                    delete timer.endTimestamp;
+                    
+                    // Trigger completion immediately
+                    setTimeout(() => {
+                        if (this.timers.has(taskId)) { // Final check before completion
+                            this.handleTimerCompletion(taskId);
+                        }
+                    }, 100);
+                }
+                // Also check for paused timers with 0 remaining time
+                else if (timer.isPaused && timer.remainingSeconds <= 0) {
+                    console.log(`Found paused completed timer: ${taskId}`);
+                    hasCompletedTimers = true;
+                    setTimeout(() => {
+                        if (this.timers.has(taskId)) { // Final check before completion
+                            this.handleTimerCompletion(taskId);
+                        }
+                    }, 100);
+                }
+            }
+        }
+        
+        return hasCompletedTimers;
     }
 
     destroy() {

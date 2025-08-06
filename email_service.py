@@ -464,8 +464,11 @@ class EmailService:
                 </div>
                 
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{challenge_url}" style="background: #ff6b35; color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px;">
+                    <a href="{url_for('main.accept_challenge', challenge_id=challenge.id, _external=True)}" style="background: #00cc6a; color: white; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px; margin: 0 10px;">
                         Accept Challenge
+                    </a>
+                    <a href="{url_for('main.decline_challenge', challenge_id=challenge.id, _external=True)}" style="background: #ff6b6b; color: white; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px; margin: 0 10px;">
+                        Decline Challenge
                     </a>
                 </div>
                 
@@ -477,6 +480,116 @@ class EmailService:
             <div style="{template['footer_style']}">
                 <p style="color: #888; margin: 0; font-size: 12px;">
                     Challenge notifications keep the competition exciting. Manage preferences in settings.
+                </p>
+            </div>
+        </div>
+        '''
+        
+        return EmailService._send_email(msg)
+
+    @staticmethod
+    def send_challenge_accepted(challenger_user, accepted_user, challenge):
+        """Send challenge acceptance notification to challenger"""
+        template = EmailService.get_email_template_base()
+        
+        msg = Message(
+            f'{accepted_user.username} accepted your challenge!',
+            recipients=[challenger_user.email]
+        )
+        
+        dashboard_url = url_for('main.competition', _external=True)
+        
+        msg.html = f'''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #00ff88, #00cc6a); padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 2.5em;">✅</h1>
+                <h2 style="color: white; margin: 10px 0 0 0;">CHALLENGE ACCEPTED!</h2>
+                <p style="color: #e8f5e8; margin: 5px 0 0 0;">DARKSULFOCUS</p>
+            </div>
+            
+            <div style="{template['body_style']}">
+                <h2 style="color: {template['heading_color']}; margin-top: 0;">The Competition Begins!</h2>
+                <p style="color: {template['text_color']}; line-height: 1.6;">
+                    Great news! <strong>{accepted_user.username}</strong> has accepted your {challenge.duration_days}-day challenge. 
+                    The competition is now active!
+                </p>
+                
+                <div style="background: #e8f5e8; border: 2px solid #00cc6a; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <h3 style="color: #00cc6a; margin: 0 0 15px 0;">Competition Details:</h3>
+                    <p style="margin: 5px 0; color: #00cc6a;">⏰ Duration: {challenge.duration_days} days</p>
+                    <p style="margin: 5px 0; color: #00cc6a;">🎯 Goal: Study more than your opponent</p>
+                    <p style="margin: 5px 0; color: #00cc6a;">🚀 Status: Active - start studying!</p>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{dashboard_url}" style="background: #00cc6a; color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px;">
+                        View Competition
+                    </a>
+                </div>
+                
+                <p style="color: {template['text_color']}; font-size: 14px; text-align: center;">
+                    May the best studier win! Track your progress and see live results.
+                </p>
+            </div>
+            
+            <div style="{template['footer_style']}">
+                <p style="color: #888; margin: 0; font-size: 12px;">
+                    Good luck with your challenge! Competition makes us stronger.
+                </p>
+            </div>
+        </div>
+        '''
+        
+        return EmailService._send_email(msg)
+
+    @staticmethod
+    def send_challenge_declined(challenger_user, declined_user, challenge):
+        """Send challenge decline notification to challenger"""
+        template = EmailService.get_email_template_base()
+        
+        msg = Message(
+            f'{declined_user.username} declined your challenge',
+            recipients=[challenger_user.email]
+        )
+        
+        dashboard_url = url_for('main.competition', _external=True)
+        
+        msg.html = f'''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #74b9ff, #0984e3); padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 2.5em;">❌</h1>
+                <h2 style="color: white; margin: 10px 0 0 0;">CHALLENGE DECLINED</h2>
+                <p style="color: #ddeeff; margin: 5px 0 0 0;">DARKSULFOCUS</p>
+            </div>
+            
+            <div style="{template['body_style']}">
+                <h2 style="color: {template['heading_color']}; margin-top: 0;">Challenge Not Accepted</h2>
+                <p style="color: {template['text_color']}; line-height: 1.6;">
+                    <strong>{declined_user.username}</strong> has declined your {challenge.duration_days}-day challenge. 
+                    Don't worry - there are many other competitors eager to test their skills!
+                </p>
+                
+                <div style="background: #f0f7ff; border: 2px solid #74b9ff; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <h3 style="color: #0984e3; margin: 0 0 15px 0;">What's Next?</h3>
+                    <p style="margin: 5px 0; color: #0984e3;">🎯 Challenge another user</p>
+                    <p style="margin: 5px 0; color: #0984e3;">📚 Focus on your personal study goals</p>
+                    <p style="margin: 5px 0; color: #0984e3;">🏆 Check the leaderboard for inspiration</p>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{dashboard_url}" style="background: #0984e3; color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px;">
+                        Find New Challenger
+                    </a>
+                </div>
+                
+                <p style="color: {template['text_color']}; font-size: 14px; text-align: center;">
+                    Keep challenging yourself - that's how legends are made!
+                </p>
+            </div>
+            
+            <div style="{template['footer_style']}">
+                <p style="color: #888; margin: 0; font-size: 12px;">
+                    The competition never stops. Ready for your next challenge?
                 </p>
             </div>
         </div>

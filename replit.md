@@ -124,6 +124,24 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (August 2025)
 
+### Mobile Timer System Enhancement
+- **Date**: August 6, 2025
+- **Change**: Enhanced timer system for mobile Chrome users with background handling and completion detection
+- **Mobile-Specific Fixes**:
+  1. **Background Detection**: Timers automatically pause when Chrome goes to background/recent tabs
+  2. **Completion Recovery**: Detects completed timers when user returns to app after backgrounding
+  3. **Visual Indicators**: Special blue styling and mobile icon for timers paused due to backgrounding
+  4. **Battery Optimization**: Stops timer updates when page not visible to save battery
+  5. **Touch Detection**: Checks for completed timers on any touch/click interaction
+- **Technical Implementation**:
+  - Enhanced `TimerManager` class with mobile-specific event handlers
+  - Added `visibilitychange`, `blur`, `focus`, `pagehide`, `pageshow` event listeners
+  - Page visibility tracking with `isPageVisible` state
+  - Background duration tracking and logging
+  - Mobile-friendly button states ("Resume" for backgrounded timers)
+  - CSS styling for `.was-backgrounded` timer state
+- **User Experience**: Solves major mobile Chrome issue where timers would complete in background but not trigger completion logic
+
 ### Timer System Redesign
 - **Date**: August 1, 2025
 - **Change**: Completely redesigned timer system to use browser local storage instead of database storage

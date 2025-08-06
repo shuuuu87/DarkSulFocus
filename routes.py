@@ -68,7 +68,7 @@ def register():
         # Try to send verification email, but don't block registration if it fails
         try:
             send_verification_email(user)
-            flash('Registration successful! You can now log in. (Verification email may not work due to configuration)', 'success')
+            flash('Registration successful! Check your email for verification link.', 'success')
         except Exception as e:
             current_app.logger.error(f'Email send failed: {e}')
             flash('Registration successful! You can now log in directly.', 'success')
@@ -153,6 +153,88 @@ def delete_task(task_id):
     
     return redirect(url_for('main.home'))
 
+@main.route('/start_server_timer/<int:task_id>', methods=['POST'])
+@login_required
+def start_server_timer(task_id):
+    """Start a task timer on the server side"""
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id, is_completed=False).first()
+    
+    if task:
+        # Pause all other active timers for this user (only one timer at a time)
+        Task.query.filter_by(user_id=current_user.id, is_active=True).update({'is_active': False})
+        
+        # Start this timer
+        task.start_timer()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Timer started',
+            'expected_completion': task.expected_completion.isoformat(),
+            'remaining_seconds': task.get_remaining_seconds()
+        })
+    
+    return jsonify({'success': False, 'error': 'Task not found'})
+
+@main.route('/pause_server_timer/<int:task_id>', methods=['POST'])
+@login_required
+def pause_server_timer(task_id):
+    """Pause a task timer"""
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id, is_completed=False).first()
+    
+    if task:
+        task.pause_timer()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Timer paused',
+            'remaining_seconds': task.get_remaining_seconds()
+        })
+    
+    return jsonify({'success': False, 'error': 'Task not found'})
+
+@main.route('/get_timer_status/<int:task_id>', methods=['GET'])
+@login_required
+def get_timer_status(task_id):
+    """Get current timer status"""
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first()
+    
+    if not task:
+        return jsonify({'success': False, 'error': 'Task not found'})
+    
+    # If task is already completed, return completed status
+    if task.is_completed:
+        return jsonify({
+            'success': True,
+            'completed': True,
+            'points_earned': 0,  # Points already awarded
+            'message': 'Task already completed!'
+        })
+    
+    # Check if timer should be completed
+    if task.is_timer_completed():
+        # Auto-complete the task
+        points_earned = task.complete_task()
+        task.is_active = False
+        task.started_at = None
+        task.expected_completion = None
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'completed': True,
+            'points_earned': points_earned,
+            'message': 'Task completed!'
+        })
+    
+    return jsonify({
+        'success': True,
+        'is_active': task.is_active,
+        'is_completed': task.is_completed,
+        'remaining_seconds': task.get_remaining_seconds()
+    })
+
 @main.route('/complete_task/<int:task_id>', methods=['POST'])
 @login_required
 def complete_task_route(task_id):
@@ -166,6 +248,10 @@ def complete_task_route(task_id):
         old_streak = current_user.current_streak
         old_hours = current_user.total_study_time // 60
         
+        # Stop server-side timer and complete task
+        task.is_active = False
+        task.started_at = None
+        task.expected_completion = None
         points_earned = task.complete_task()
         db.session.commit()
         
@@ -313,11 +399,26 @@ def competition():
             challenge.challenged_id = opponent.id
             challenge.duration_days = form.duration_days.data
             challenge.end_date = datetime.utcnow() + timedelta(days=form.duration_days.data)
-            challenge.status = 'active'
+            challenge.status = 'pending'  # Should start as pending, not active
             db.session.add(challenge)
             db.session.commit()
+            
+            # Send challenge notification email (check if user has challenge emails enabled)
+            try:
+                # Use hasattr to check if challenge_emails field exists, default to True if not
+                if getattr(opponent, 'challenge_emails', True):
+                    from email_service import EmailService
+                    EmailService.send_challenge_notification(opponent, current_user, challenge)
+                    print(f"Challenge email sent to {opponent.username}")
+                else:
+                    print(f"Challenge emails disabled for {opponent.username}")
+            except Exception as e:
+                print(f"Failed to send challenge email: {e}")
+            
             flash(f'Challenge sent to {opponent.username}!', 'success')
             return redirect(url_for('main.competition'))
+        else:
+            flash('User not found!', 'danger')
     
     # Get user's challenges
     sent_challenges = Challenge.query.filter_by(challenger_id=current_user.id).order_by(Challenge.created_at.desc()).limit(10).all()
@@ -333,7 +434,24 @@ def competition():
 def accept_challenge(challenge_id):
     challenge = Challenge.query.filter_by(id=challenge_id, challenged_id=current_user.id).first_or_404()
     challenge.status = 'active'
+    challenge.start_date = datetime.utcnow()  # Reset start date when accepted
+    challenge.end_date = datetime.utcnow() + timedelta(days=challenge.duration_days)
     db.session.commit()
+    
+    # Send acceptance confirmation email to challenger 
+    challenger = User.query.get(challenge.challenger_id)
+    if challenger:
+        try:
+            # Use hasattr to check if challenge_emails field exists, default to True if not
+            if getattr(challenger, 'challenge_emails', True):
+                from email_service import EmailService
+                EmailService.send_challenge_accepted(challenger, current_user, challenge)
+                print(f"Challenge acceptance email sent to {challenger.username}")
+            else:
+                print(f"Challenge emails disabled for {challenger.username}")
+        except Exception as e:
+            print(f"Failed to send challenge acceptance email: {e}")
+    
     flash('Challenge accepted!', 'success')
     return redirect(url_for('main.competition'))
 
@@ -343,6 +461,20 @@ def decline_challenge(challenge_id):
     challenge = Challenge.query.filter_by(id=challenge_id, challenged_id=current_user.id).first_or_404()
     challenge.status = 'declined'
     db.session.commit()
+    
+    # Send decline notification email to challenger if they have challenge emails enabled
+    challenger = User.query.get(challenge.challenger_id)
+    if challenger:
+        try:
+            if getattr(challenger, 'challenge_emails', True):
+                from email_service import EmailService
+                EmailService.send_challenge_declined(challenger, current_user, challenge)
+                print(f"Challenge decline email sent to {challenger.username}")
+            else:
+                print(f"Challenge emails disabled for {challenger.username}")
+        except Exception as e:
+            print(f"Failed to send challenge decline email: {e}")
+    
     flash('Challenge declined.', 'info')
     return redirect(url_for('main.competition'))
 

@@ -135,12 +135,49 @@ class Task(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime)
     
+    # Server-side timer tracking for true background timers
+    started_at = db.Column(db.DateTime)
+    expected_completion = db.Column(db.DateTime)  # When timer should complete
+    is_active = db.Column(db.Boolean, default=False)  # Is timer currently running
+    
     def get_time_display(self):
         total_seconds = self.duration_minutes * 60
         hours = int(total_seconds // 3600)
         minutes = int((total_seconds % 3600) // 60)
         seconds = int(total_seconds % 60)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    
+    def start_timer(self):
+        """Start the server-side timer"""
+        self.is_active = True
+        self.started_at = datetime.utcnow()
+        self.expected_completion = datetime.utcnow() + timedelta(minutes=self.duration_minutes)
+        
+    def pause_timer(self):
+        """Pause the server-side timer and calculate remaining time"""
+        if self.is_active and self.started_at:
+            # Calculate how much time has elapsed
+            elapsed_minutes = (datetime.utcnow() - self.started_at).total_seconds() / 60
+            # Update duration_minutes to remaining time
+            self.duration_minutes = max(0, int(self.duration_minutes - elapsed_minutes))
+            self.is_active = False
+            self.started_at = None
+            self.expected_completion = None
+    
+    def get_remaining_seconds(self):
+        """Get remaining seconds for active timer"""
+        if not self.is_active or not self.expected_completion:
+            return self.duration_minutes * 60
+            
+        remaining = (self.expected_completion - datetime.utcnow()).total_seconds()
+        return max(0, int(remaining))
+    
+    def is_timer_completed(self):
+        """Check if timer should be completed"""
+        if self.is_completed or not self.is_active:
+            return False
+            
+        return datetime.utcnow() >= self.expected_completion
     
     def complete_task(self):
         if not self.is_completed:
