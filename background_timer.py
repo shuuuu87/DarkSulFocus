@@ -6,6 +6,7 @@ from datetime import datetime
 import time
 import threading
 import logging
+import pytz
 
 class BackgroundTimerService:
     def __init__(self):
@@ -32,25 +33,40 @@ class BackgroundTimerService:
         """Main loop to check for completed timers"""
         while self.running:
             try:
-                # Import here to avoid circular imports
-                from app import app, db
-                with app.app_context():
-                    self._check_completed_timers()
+                # Check if we should run based on IST timezone
+                if self._should_run_now():
+                    # Import here to avoid circular imports
+                    from app import app, db
+                    with app.app_context():
+                        self._check_completed_timers()
+                else:
+                    logging.info("Skipping background service - quiet hours (12 AM - 6 AM IST)")
             except Exception as e:
                 logging.error(f"Error in background timer checker: {e}")
             
             # Wait before next check
             time.sleep(self.check_interval)
     
+    def _should_run_now(self):
+        """Check if background service should run (not between 12 AM - 6 AM IST)"""
+        ist = pytz.timezone('Asia/Kolkata')
+        current_time = datetime.now(ist)
+        current_hour = current_time.hour
+        
+        # Don't run between 12 AM (0) and 6 AM (6) IST
+        if 0 <= current_hour < 6:
+            return False
+        return True
+    
     def _check_completed_timers(self):
         """Check for timers that should be completed and process them"""
         from app import db
-        from models import Task
+        from models import Task, Challenge
         
         # Find all active tasks that should be completed
         completed_tasks = Task.query.filter(
-            Task.is_active == True,
-            Task.is_completed == False,
+            Task.is_active.is_(True),
+            Task.is_completed.is_(False),
             Task.expected_completion <= datetime.utcnow()
         ).all()
         
@@ -87,6 +103,33 @@ class BackgroundTimerService:
                 
             except Exception as e:
                 logging.error(f"Error completing task {task.id}: {e}")
+                db.session.rollback()
+        
+        # Check for completed challenges
+        self._check_completed_challenges()
+    
+    def _check_completed_challenges(self):
+        """Check for challenges that should be completed and process them"""
+        from app import db
+        from models import Challenge
+        
+        # Find all active challenges that should be completed
+        completed_challenges = Challenge.query.filter(
+            Challenge.status == 'active'
+        ).filter(
+            Challenge.end_date <= datetime.utcnow()
+        ).all()
+        
+        if completed_challenges:
+            logging.info(f"Found {len(completed_challenges)} completed challenges")
+            
+        for challenge in completed_challenges:
+            try:
+                challenge.calculate_winner()
+                db.session.commit()
+                logging.info(f"Challenge {challenge.id} completed automatically")
+            except Exception as e:
+                logging.error(f"Error completing challenge {challenge.id}: {e}")
                 db.session.rollback()
 
 # Global instance

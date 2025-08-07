@@ -76,7 +76,7 @@ def create_app():
     csrf.init_app(app)
 
     # Login manager configuration
-    login_manager.login_view = 'main.login'
+    login_manager.login_view = 'main.login'  # type: ignore
     login_manager.login_message = 'Please log in to access this page.'
     login_manager.login_message_category = 'info'
     

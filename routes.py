@@ -424,10 +424,18 @@ def competition():
     sent_challenges = Challenge.query.filter_by(challenger_id=current_user.id).order_by(Challenge.created_at.desc()).limit(10).all()
     received_challenges = Challenge.query.filter_by(challenged_id=current_user.id).order_by(Challenge.created_at.desc()).limit(10).all()
     
+    # Get active challenges to show current progress
+    active_challenges = Challenge.query.filter(
+        Challenge.status == 'active'
+    ).filter(
+        (Challenge.challenger_id == current_user.id) | (Challenge.challenged_id == current_user.id)
+    ).all()
+    
     return render_template('competition.html', 
                          form=form,
                          sent_challenges=sent_challenges,
-                         received_challenges=received_challenges)
+                         received_challenges=received_challenges,
+                         active_challenges=active_challenges)
 
 @main.route('/accept_challenge/<int:challenge_id>')
 @login_required

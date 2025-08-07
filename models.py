@@ -177,7 +177,7 @@ class Task(db.Model):
         if self.is_completed or not self.is_active:
             return False
             
-        return datetime.utcnow() >= self.expected_completion
+        return self.expected_completion is not None and datetime.utcnow() >= self.expected_completion
     
     def complete_task(self):
         if not self.is_completed:
@@ -192,6 +192,21 @@ class Task(db.Model):
             user = db.session.get(User, self.user_id)
             if user:
                 user.total_points += points_earned
+            
+            # Update active challenges with points earned during challenge period
+            active_challenges = Challenge.query.filter(
+                Challenge.status == 'active',
+                Challenge.start_date <= datetime.utcnow(),
+                Challenge.end_date > datetime.utcnow()
+            ).filter(
+                (Challenge.challenger_id == self.user_id) | (Challenge.challenged_id == self.user_id)
+            ).all()
+            
+            for challenge in active_challenges:
+                if challenge.challenger_id == self.user_id:
+                    challenge.challenger_points += points_earned
+                elif challenge.challenged_id == self.user_id:
+                    challenge.challenged_points += points_earned
             
             # Update daily stats
             ist = pytz.timezone('Asia/Kolkata')
@@ -248,11 +263,37 @@ class Challenge(db.Model):
             
             self.status = 'completed'
             
-            # Award points to winner
+            # Award challenge bonus points
             if self.winner_id:
                 winner = db.session.get(User, self.winner_id)
+                loser_id = self.challenged_id if self.winner_id == self.challenger_id else self.challenger_id
+                loser = db.session.get(User, loser_id)
+                
                 if winner:
                     winner.total_points += self.points_gained
+                    
+                # Give consolation points to loser
+                if loser:
+                    loser.total_points += 2.0
+                    
+            # Send result emails
+            try:
+                from email_service import EmailService
+                challenger = db.session.get(User, self.challenger_id)
+                challenged = db.session.get(User, self.challenged_id)
+                
+                if challenger and getattr(challenger, 'challenge_emails', True):
+                    is_challenger_winner = (self.winner_id == self.challenger_id) if self.winner_id else False
+                    EmailService.send_challenge_result(challenger, self, is_challenger_winner)
+                    
+                if challenged and getattr(challenged, 'challenge_emails', True):
+                    is_challenged_winner = (self.winner_id == self.challenged_id) if self.winner_id else False
+                    EmailService.send_challenge_result(challenged, self, is_challenged_winner)
+            except Exception as e:
+                print(f"Failed to send challenge result emails: {e}")
+                
+            return True
+        return False
 
 class DailyStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)

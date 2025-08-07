@@ -124,6 +124,24 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (August 2025)
 
+### Competition System Enhancement
+- **Date**: August 7, 2025
+- **Change**: Fixed and completed the competition system with automatic point tracking and challenge completion
+- **Key Fixes**:
+  1. **Challenge-Specific Points**: Points earned during challenges are now properly tracked in `challenger_points` and `challenged_points` fields
+  2. **Automatic Challenge Completion**: Background service now automatically detects and completes expired challenges
+  3. **Winner Calculation**: Automated winner determination with bonus points awarded to winners and consolation points to losers
+  4. **Result Notifications**: Automatic email notifications sent to both participants when challenges complete
+  5. **Real-time Progress**: Added active challenge progress display showing current points and time remaining
+- **Technical Implementation**:
+  - Modified `Task.complete_task()` method to update challenge points when tasks complete during active challenges
+  - Enhanced `Challenge.calculate_winner()` method with proper point distribution and email notifications
+  - Added `_check_completed_challenges()` method to background timer service
+  - Updated competition template to show active challenge progress with visual progress bars
+- **User Experience**: Competition system now fully automated from challenge creation to completion with email notifications
+
+## Recent Changes (August 2025)
+
 ### Mobile Timer System Enhancement
 - **Date**: August 6, 2025
 - **Change**: Enhanced timer system for mobile Chrome users with background handling and completion detection
